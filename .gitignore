@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Public build settings only (API URL); see the file header.
+!frontend/.env.production
 *.bak
 *.pem
 *.key

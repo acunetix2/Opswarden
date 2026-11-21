@@ -53,7 +53,13 @@ import { refreshSession, usesSupabaseAuth } from "@/lib/supabase-auth";
 
 import { signedOut, tokenRefreshed } from "./session-slice";
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8099").replace(/\/$/, "");
+/**
+ * Backend base URL, compiled in at build time (frontend/.env.production for
+ * deployed builds, .env.local for local development).
+ */
+export const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production" ? "https://opswarden.onrender.com" : "http://127.0.0.1:8099")
+).replace(/\/$/, "");
 
 interface TokenState {
   session: { token: string | null };

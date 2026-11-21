@@ -4,8 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
-/** The uploaded OpsWarden logo. Save the artwork to frontend/public/logo.png. */
-export const LOGO_SRC = "/logo.png";
+/** The OpsWarden logo (app/icon.svg, also the favicon). Swap in other artwork by changing this path. */
+export const LOGO_SRC = "/icon.svg";
 
 /**
  * OpsWarden mark. Renders the official logo image (public/logo.png). If that
