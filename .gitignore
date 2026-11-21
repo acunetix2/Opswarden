@@ -44,3 +44,9 @@ EXTRACTION_HARDENING_PLAN.md
 Thumbs.db
 .vscode/
 .idea/
+
+# ---- Cloudflare (OpenNext) build output and local secrets ----
+.open-next/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
