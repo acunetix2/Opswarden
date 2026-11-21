@@ -4,6 +4,7 @@ import { Paperclip } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Combobox } from "@/components/ui/combobox";
+import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -166,10 +167,25 @@ export function PurchaseOrderFormDialog({ workspaceId, open, onClose, purchaseOr
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Order date" htmlFor="po-date">
-            <Input id="po-date" type="date" value={form.order_date ?? ""} onChange={(e) => set("order_date", e.target.value)} />
+            <DatePicker
+              id="po-date"
+              value={form.order_date}
+              onChange={(v) => {
+                set("order_date", v);
+                // A delivery date before the new order date no longer makes sense.
+                if (v && form.expected_delivery_date && form.expected_delivery_date < v) set("expected_delivery_date", null);
+              }}
+              placeholder="Pick the order date"
+            />
           </Field>
           <Field label="Expected delivery" htmlFor="po-delivery">
-            <Input id="po-delivery" type="date" value={form.expected_delivery_date ?? ""} onChange={(e) => set("expected_delivery_date", e.target.value)} />
+            <DatePicker
+              id="po-delivery"
+              value={form.expected_delivery_date}
+              onChange={(v) => set("expected_delivery_date", v)}
+              min={form.order_date || null}
+              placeholder="Optional"
+            />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">

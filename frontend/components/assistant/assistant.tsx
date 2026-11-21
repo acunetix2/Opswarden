@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, Mic, RotateCcw, SendHorizontal, SkipForward, Sparkles, Square, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { SpeakButton } from "@/components/ui/speak-button";
 import { toAppError } from "@/lib/api-error";
 import { answer, STARTER_SUGGESTIONS, type AssistantLink } from "@/lib/assistant";
 import { cn } from "@/lib/cn";
+import { placePanel } from "@/lib/panel-placement";
+import { useDraggableDock } from "@/lib/use-draggable-dock";
 import { openMicrophone, recordTurn, speak, transcribe, voiceSupported } from "@/lib/voice";
 import { formatMoneyValue } from "@/lib/format";
 import {
@@ -52,6 +54,8 @@ const GREETING: Omit<Message, "id"> = {
 };
 
 let nextId = 1;
+/** Launcher button size in px (48px icon + padding + border). */
+const LAUNCHER_SIZE = 62;
 
 /**
  * Floating help assistant, bottom-right (above the mobile nav). Built-in
@@ -70,6 +74,38 @@ export function Assistant() {
   const launcherRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const dockCtl = useDraggableDock("ow-warden-dock", LAUNCHER_SIZE);
+
+  /*
+   * Panel placement follows the button wherever it is: opens above it when
+   * there's more room above, otherwise below; lines up with the button's side;
+   * always fits on screen. Recomputed on open, while dragging and on resize.
+   */
+  const [placement, setPlacement] = useState<{ style: CSSProperties; origin: string } | null>(null);
+  const place = useCallback(() => {
+    const btn = launcherRef.current;
+    if (!btn) return;
+    const p = placePanel(btn.getBoundingClientRect(), window.innerWidth, window.innerHeight);
+    const style: CSSProperties = {
+      left: p.left,
+      right: "auto",
+      width: p.width,
+      height: p.height,
+      ...(p.up ? { bottom: p.bottom, top: "auto" } : { top: p.top, bottom: "auto" }),
+    };
+    setPlacement({ style, origin: `${p.up ? "origin-bottom" : "origin-top"}-${p.alignLeft ? "left" : "right"}` });
+  }, []);
+
+  const dragKey = JSON.stringify(dockCtl.style ?? null);
+  useLayoutEffect(() => {
+    if (open) place();
+    else setPlacement(null);
+  }, [open, place, dragKey]);
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, place]);
 
   // Live data Warden answers from. Fetched only once the panel is opened; shared with the pages' caches.
   const overview = useOverviewQuery({ workspaceId: workspace.id, days: 30 }, { skip: !open });
@@ -296,6 +332,8 @@ export function Assistant() {
 
   const last = messages[messages.length - 1];
 
+  const panelStyle: CSSProperties | undefined = placement?.style;
+
   return (
     <div className="print:hidden">
       {open ? (
@@ -303,11 +341,15 @@ export function Assistant() {
           role="dialog"
           aria-labelledby={titleId}
           onKeyDown={(e) => e.key === "Escape" && close()}
+          style={panelStyle}
           className={cn(
             "fixed z-50 flex flex-col overflow-hidden rounded-[16px] border border-line bg-surface shadow-[0_24px_60px_rgb(17_17_17/0.22)]",
             "right-3 left-3 bottom-[calc(9rem+env(safe-area-inset-bottom))] h-[min(68vh,560px)]",
             "sm:left-auto sm:w-[25rem] lg:right-6 lg:bottom-24 lg:h-[min(72vh,600px)]",
-            "origin-bottom-right motion-safe:animate-[ow-panel-in_220ms_var(--ease-out)]",
+            placement?.origin ?? "origin-bottom-right",
+            // Hidden for the first frame until it has measured where the button is.
+            !placement && "invisible",
+            "motion-safe:animate-[ow-panel-in_220ms_var(--ease-out)]",
           )}
         >
           <header className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3 text-ink">
@@ -471,13 +513,19 @@ export function Assistant() {
       <button
         ref={launcherRef}
         type="button"
-        onClick={() => toggle()}
+        onClick={() => dockCtl.guardClick(() => toggle())}
+        {...dockCtl.handlers}
+        onDoubleClick={() => dockCtl.dock && dockCtl.reset()}
+        style={dockCtl.style}
         aria-expanded={open}
-        aria-label={open ? "Close Warden assistant" : "Open Warden assistant (W)"}
+        aria-label={`${open ? "Close Warden assistant" : "Open Warden assistant (W)"}. Drag to move it, or Alt and arrow keys.`}
+        title={open ? "Close Warden" : "Ask Warden · drag to move, double-click to reset"}
         className={cn(
-          "group fixed z-50 flex items-center gap-0 rounded-full border border-line bg-surface p-1.5 text-ink shadow-[0_10px_30px_rgb(17_17_17/0.18)]",
+          "group fixed z-50 flex touch-none select-none items-center gap-0 rounded-full border border-line bg-surface p-1.5 text-ink shadow-[0_10px_30px_rgb(17_17_17/0.18)]",
           "right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:right-6 lg:bottom-6",
-          "transition-[translate,box-shadow] duration-200 ease-[var(--ease-out)] hover:-translate-y-0.5",
+          dockCtl.dragging
+            ? "scale-105 cursor-grabbing shadow-[0_18px_44px_rgb(17_17_17/0.28)]"
+            : "cursor-grab transition-[translate,box-shadow,left,right,bottom,top] duration-200 ease-[var(--ease-out)] hover:-translate-y-0.5",
         )}
       >
         {!open ? <span aria-hidden className="ow-glow pointer-events-none absolute inset-0 rounded-full" /> : null}
@@ -486,7 +534,11 @@ export function Assistant() {
         </span>
         <span
           aria-hidden
-          className="max-w-0 overflow-hidden whitespace-nowrap text-[13.5px] font-medium opacity-0 transition-[max-width,opacity,padding] duration-300 ease-[var(--ease-out)] group-hover:max-w-32 group-hover:pr-3 group-hover:pl-1 group-hover:opacity-100 group-focus-visible:max-w-32 group-focus-visible:pr-3 group-focus-visible:pl-1 group-focus-visible:opacity-100"
+          className={cn(
+            "max-w-0 overflow-hidden whitespace-nowrap text-[13.5px] font-medium opacity-0 transition-[max-width,opacity,padding] duration-300 ease-[var(--ease-out)]",
+            !dockCtl.dragging &&
+              "group-hover:max-w-32 group-hover:pr-3 group-hover:pl-1 group-hover:opacity-100 group-focus-visible:max-w-32 group-focus-visible:pr-3 group-focus-visible:pl-1 group-focus-visible:opacity-100",
+          )}
         >
           {open ? "Close" : "Ask Warden"}
         </span>

@@ -62,9 +62,10 @@ export function ConfirmDialog({
       onCancel={(e) => {
         if (busy) e.preventDefault();
       }}
-      className="m-auto w-[min(92vw,32rem)] overflow-hidden rounded-[14px] border border-line bg-surface p-0 text-ink shadow-[0_24px_60px_rgb(17_17_17/0.22)]"
+      // Capped to the viewport: header and buttons stay put, the body scrolls.
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(92vw,32rem)] flex-col overflow-hidden rounded-[14px] border border-line bg-surface p-0 text-ink shadow-[0_24px_60px_rgb(17_17_17/0.22)] open:flex"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-line px-6 pt-5 pb-4">
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-6 pt-5 pb-4">
         <h2 id={titleId} className="text-[18px] font-semibold leading-snug">
           {title}
         </h2>
@@ -78,7 +79,7 @@ export function ConfirmDialog({
           <X className="size-4" aria-hidden />
         </button>
       </div>
-      <div className="space-y-4 px-6 py-5">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-5">
         {description ? (
           <div id={descId} className="text-[13px] leading-relaxed text-ink-2">
             {description}
@@ -86,7 +87,7 @@ export function ConfirmDialog({
         ) : null}
         {children}
       </div>
-      <div className="flex justify-end gap-2 border-t border-line bg-canvas/60 px-6 py-3.5">
+      <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-canvas/60 px-6 py-3.5">
         <Button variant="ghost" onClick={onClose} disabled={busy}>
           Cancel
         </Button>
