@@ -13,6 +13,8 @@ import { useLoginMutation } from "@/store/api";
 import { useAppDispatch, useSession } from "@/store/hooks";
 import { signedIn } from "@/store/session-slice";
 
+import { SIGNUP_ENABLED } from "@/components/landing/landing-cta";
+
 import { AuthLayout } from "./auth-layout";
 
 /** Synthetic accounts created by backend/app/seed.py in development. */
@@ -146,6 +148,14 @@ export function LoginView() {
         <Button type="submit" variant="accent" className="h-10 w-full text-[14px]" loading={submitting || busy} disabled={!email || !password}>
           Sign in
         </Button>
+        {SIGNUP_ENABLED ? (
+          <p className="text-center text-[13px] text-ink-3">
+            New to OpsWarden?{" "}
+            <Link href="/signup" className="font-medium text-brand-ink hover:underline">
+              Create an account
+            </Link>
+          </p>
+        ) : null}
       </form>
     </AuthLayout>
   );

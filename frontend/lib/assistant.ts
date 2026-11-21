@@ -598,8 +598,11 @@ export function answer(message: string, ctx: AssistantContext): AssistantReply {
     return done({ text: "Hi, I'm Warden. Here's what I can do:\n" + CAPABILITIES, suggestions: STARTER_SUGGESTIONS });
   }
   if (/\b(thanks|thank you|cheers|perfect|great)\b/.test(t) && raw.length < 40) return done({ text: "Happy to help. Ask any time." });
+  if (/\b(who (made|created|built|trained|developed) you|who is behind you|which (ai|model)|what (ai|model) are you|are you (chat ?gpt|gpt|openai|gemini|claude|llama))\b/.test(t)) {
+    return done({ text: "I'm Warden, the assistant built by the OpsWarden team. I can:\n" + CAPABILITIES, suggestions: STARTER_SUGGESTIONS });
+  }
   if (/\b(help|what can you do|what do you do|who are you|capabilities)\b/.test(t) && raw.length < 40) {
-    return done({ text: "I'm Warden, your OpsWarden guide. I can:\n" + CAPABILITIES, suggestions: STARTER_SUGGESTIONS });
+    return done({ text: "I'm Warden, OpsWarden's assistant. I can:\n" + CAPABILITIES, suggestions: STARTER_SUGGESTIONS });
   }
 
   // Follow-up: "open it", "take me there"

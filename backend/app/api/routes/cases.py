@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks
 
 from app.api.deps import WorkspaceContext, load_case, workspace_context
-from app.api.errors import conflict
+from app.api.errors import conflict, unprocessable
 from app.core.logging import get_logger
 from app.core.permissions import Permission
 from app.db import SessionLocal, get_db, new_uuid
@@ -16,6 +16,7 @@ from app.models.approval import Approval
 from app.models.audit_event import AuditEvent
 from app.models.case import Case
 from app.models.finding import Finding
+from app.models.registry import PurchaseOrder, Supplier
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.document import Document
@@ -41,9 +42,13 @@ _ACTIVE_FINDING = ("open", "confirmed", "needs_review")
 def _to_out(c: Case, db: Session | None = None) -> CaseOut:
     owner_name = None
     finding_count = 0
+    contact_email = None
     if db is not None:
         owner = db.get(User, c.owner_user_id)
         owner_name = (owner.full_name or owner.email) if owner else None
+        if c.supplier_id:
+            sup = db.get(Supplier, c.supplier_id)
+            contact_email = sup.contact_email if sup else None
         finding_count = db.execute(
             select(func.count(Finding.id)).where(
                 Finding.case_id == c.id, Finding.status.in_(_ACTIVE_FINDING)
@@ -58,6 +63,9 @@ def _to_out(c: Case, db: Session | None = None) -> CaseOut:
         title=c.title,
         supplier_name=c.supplier_name,
         supplier_reference=c.supplier_reference,
+        supplier_id=c.supplier_id,
+        purchase_order_id=c.purchase_order_id,
+        supplier_contact_email=contact_email,
         currency=c.currency,
         notes=c.notes,
         status=c.status,
@@ -77,13 +85,22 @@ def create_case(
 ) -> CaseOut:
     ctx.require(Permission.CREATE_CASE)
     workspace = db.get(Workspace, workspace_id)
+    supplier, po = _registry_refs(db, workspace_id, payload.supplier_id, payload.purchase_order_id)
+
+    title = (payload.title or "").strip()
+    if not title:
+        if po is None:
+            raise unprocessable("TITLE_REQUIRED", "Give the case a short title.")
+        title = f"{po.po_number} · {supplier.name}" if supplier else po.po_number
     case = Case(
         workspace_id=workspace_id,
         case_number=case_service.next_case_number(db, workspace),
-        title=payload.title,
-        supplier_name=payload.supplier_name,
-        supplier_reference=payload.supplier_reference,
-        currency=payload.currency.upper(),
+        title=title[:300],
+        supplier_id=supplier.id if supplier else None,
+        purchase_order_id=po.id if po else None,
+        supplier_name=supplier.name if supplier else payload.supplier_name,
+        supplier_reference=po.po_number if po else payload.supplier_reference,
+        currency=((po.currency if po else None) or payload.currency or (supplier.default_currency if supplier else None) or "USD").upper(),
         notes=payload.notes,
         status="draft",
         owner_user_id=ctx.user.id,
@@ -98,11 +115,35 @@ def create_case(
         event_type="case.created",
         actor_type="user",
         actor_id=ctx.user.id,
-        payload={"case_number": case.case_number, "title": case.title},
+        payload={
+            "case_number": case.case_number,
+            "title": case.title,
+            **({"from_purchase_order": po.po_number} if po else {}),
+        },
         commit=False,
     )
+    if po is not None:
+        from app.api.routes.registry import attach_po_file_to_case
+
+        attach_po_file_to_case(db, po, case, ctx.user.id)
     db.commit()
     return _to_out(case, db)
+
+
+def _registry_refs(db: Session, workspace_id: str, supplier_id: str | None, po_id: str | None) -> tuple[Supplier | None, PurchaseOrder | None]:
+    """Resolves register references, refusing anything from another workspace."""
+    po = None
+    if po_id:
+        po = db.get(PurchaseOrder, po_id)
+        if po is None or po.workspace_id != workspace_id:
+            raise unprocessable("PURCHASE_ORDER_NOT_FOUND", "Choose a registered purchase order.")
+        supplier_id = po.supplier_id
+    supplier = None
+    if supplier_id:
+        supplier = db.get(Supplier, supplier_id)
+        if supplier is None or supplier.workspace_id != workspace_id:
+            raise unprocessable("SUPPLIER_NOT_FOUND", "Choose a registered supplier.")
+    return supplier, po
 
 
 @router.get("/workspaces/{workspace_id}/cases", response_model=list[CaseOut])
@@ -157,6 +198,17 @@ def patch_case(
     case, ctx = bundle
     ctx.require(Permission.EDIT_CASE)
     data = payload.model_dump(exclude_unset=True)
+    if "supplier_id" in data or "purchase_order_id" in data:
+        supplier, po = _registry_refs(db, case.workspace_id, data.get("supplier_id"), data.get("purchase_order_id"))
+        case.supplier_id = supplier.id if supplier else None
+        case.purchase_order_id = po.id if po else None
+        if supplier:
+            data["supplier_name"] = supplier.name
+        if po:
+            data["supplier_reference"] = po.po_number
+            data.setdefault("currency", po.currency)
+    if "title" in data and not (data["title"] or "").strip():
+        raise unprocessable("TITLE_REQUIRED", "Give the case a short title.")
     for field in ("title", "supplier_name", "supplier_reference", "notes"):
         if field in data:
             setattr(case, field, data[field])

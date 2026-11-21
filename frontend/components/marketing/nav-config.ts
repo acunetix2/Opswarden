@@ -70,6 +70,7 @@ export const FOOTER_COLUMNS: { title: string; links: { href: string; label: stri
       { href: "/resources#faq", label: "FAQ" },
       { href: "/resources#glossary", label: "Glossary" },
       { href: "/login", label: "Sign in" },
+      { href: "/signup", label: "Create account" },
     ],
   },
   {

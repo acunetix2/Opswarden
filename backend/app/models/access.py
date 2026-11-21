@@ -62,3 +62,27 @@ class NotificationState(Base):
     workspace_id: Mapped[str] = mapped_column(GUID, index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(GUID, index=True, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SignupVerification(Base):
+    """A sign-up waiting for its emailed one-time code.
+
+    The code is stored only as an HMAC (keyed with SECRET_KEY), so a database
+    leak doesn't reveal it. The chosen password is already bcrypt-hashed here;
+    the account itself is created only after the code is confirmed.
+    """
+
+    __tablename__ = "signup_verifications"
+
+    id: Mapped[str] = mapped_column(GUID, primary_key=True, default=new_uuid)
+    email: Mapped[str] = mapped_column(String(320), index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    sends: Mapped[int] = mapped_column(default=1, nullable=False)
+    last_sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

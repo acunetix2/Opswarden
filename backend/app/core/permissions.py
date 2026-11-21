@@ -26,6 +26,7 @@ class Permission(str, Enum):
     DECIDE_APPROVAL = "decide_approval"
     EXECUTE_ACTION = "execute_action"
     MANAGE_CASE_LIFECYCLE = "manage_case_lifecycle"  # archive / reopen
+    MANAGE_REGISTER = "manage_register"  # add/edit suppliers and purchase orders
     MANAGE_WORKSPACE = "manage_workspace"
 
 
@@ -44,6 +45,7 @@ _MATRIX: dict[Role, set[Permission]] = {
         Permission.DECIDE_APPROVAL,
         Permission.EXECUTE_ACTION,
         Permission.MANAGE_CASE_LIFECYCLE,
+        Permission.MANAGE_REGISTER,
     },
     Role.contributor: {
         Permission.READ_CASE,

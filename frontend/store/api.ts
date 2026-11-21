@@ -33,8 +33,14 @@ import type {
   Invitation,
   InvitationLookup,
   Notifications,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  RegisteredSupplier,
+  SearchHit,
+  SignupStart,
   Role,
   Supplier,
+  SupplierInput,
   User,
   Workspace,
   WorkspaceDocument,
@@ -107,11 +113,69 @@ export const opswardenApi = createApi({
     "Suppliers",
     "Invitations",
     "Notifications",
+    "Registry",
   ],
   endpoints: (build) => ({
+    // ---- Supplier and purchase-order register --------------------------------
+    registeredSuppliers: build.query<RegisteredSupplier[], { workspaceId: string; includeInactive?: boolean }>({
+      query: ({ workspaceId, includeInactive }) => ({
+        url: `/workspaces/${workspaceId}/registry/suppliers`,
+        params: includeInactive ? { include_inactive: true } : undefined,
+      }),
+      providesTags: ["Registry"],
+    }),
+    createSupplier: build.mutation<RegisteredSupplier, { workspaceId: string; body: SupplierInput }>({
+      query: ({ workspaceId, body }) => ({ url: `/workspaces/${workspaceId}/registry/suppliers`, method: "POST", body }),
+      invalidatesTags: ["Registry", "Suppliers", "Activity"],
+    }),
+    updateSupplier: build.mutation<RegisteredSupplier, { supplierId: string; body: Partial<SupplierInput> }>({
+      query: ({ supplierId, body }) => ({ url: `/registry/suppliers/${supplierId}`, method: "PATCH", body }),
+      invalidatesTags: ["Registry", "Suppliers", "Activity"],
+    }),
+    importSuppliers: build.mutation<{ created: number; linked_cases: number }, string>({
+      query: (workspaceId) => ({ url: `/workspaces/${workspaceId}/registry/suppliers/import-from-cases`, method: "POST" }),
+      invalidatesTags: ["Registry", "Suppliers", "CaseList", "Activity"],
+    }),
+    purchaseOrders: build.query<PurchaseOrder[], { workspaceId: string; supplierId?: string; status?: string }>({
+      query: ({ workspaceId, supplierId, status }) => ({
+        url: `/workspaces/${workspaceId}/registry/purchase-orders`,
+        params: { ...(supplierId ? { supplier_id: supplierId } : {}), ...(status ? { status } : {}) },
+      }),
+      providesTags: ["Registry"],
+    }),
+    createPurchaseOrder: build.mutation<PurchaseOrder, { workspaceId: string; body: PurchaseOrderInput }>({
+      query: ({ workspaceId, body }) => ({ url: `/workspaces/${workspaceId}/registry/purchase-orders`, method: "POST", body }),
+      invalidatesTags: ["Registry", "Activity"],
+    }),
+    updatePurchaseOrder: build.mutation<PurchaseOrder, { poId: string; body: Partial<PurchaseOrderInput> }>({
+      query: ({ poId, body }) => ({ url: `/registry/purchase-orders/${poId}`, method: "PATCH", body }),
+      invalidatesTags: ["Registry", "Activity"],
+    }),
+    uploadPurchaseOrderFile: build.mutation<PurchaseOrder, { poId: string; file: File }>({
+      query: ({ poId, file }) => {
+        const form = new FormData();
+        form.append("file", file);
+        return { url: `/registry/purchase-orders/${poId}/file`, method: "PUT", body: form };
+      },
+      invalidatesTags: ["Registry", "Activity"],
+    }),
+    search: build.query<{ query: string; hits: SearchHit[] }, { workspaceId: string; q: string }>({
+      query: ({ workspaceId, q }) => ({ url: `/workspaces/${workspaceId}/search`, params: { q } }),
+      keepUnusedDataFor: 30,
+    }),
+
     // ---- Auth & workspace ---------------------------------------------------
     login: build.mutation<{ access_token: string }, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
+    }),
+    signupStart: build.mutation<SignupStart, { full_name: string; email: string; password: string; workspace_name: string }>({
+      query: (body) => ({ url: "/auth/signup/start", method: "POST", body }),
+    }),
+    signupResend: build.mutation<SignupStart, { verification_id: string }>({
+      query: (body) => ({ url: "/auth/signup/resend", method: "POST", body }),
+    }),
+    signupVerify: build.mutation<{ access_token: string; workspace_id: string }, { verification_id: string; code: string }>({
+      query: (body) => ({ url: "/auth/signup/verify", method: "POST", body }),
     }),
     requestPasswordReset: build.mutation<{ message: string; dev_reset_url: string | null }, { email: string }>({
       query: (body) => ({ url: "/auth/password-reset/request", method: "POST", body }),
@@ -200,7 +264,7 @@ export const opswardenApi = createApi({
     }),
     createCase: build.mutation<Case, { workspaceId: string; body: CaseCreate }>({
       query: ({ workspaceId, body }) => ({ url: `/workspaces/${workspaceId}/cases`, method: "POST", body }),
-      invalidatesTags: ["CaseList", "Overview", "Suppliers", "Activity"],
+      invalidatesTags: ["CaseList", "Overview", "Suppliers", "Registry", "WorkspaceDocuments", "Activity"],
     }),
     updateCase: build.mutation<Case, CaseScoped & { body: Partial<CaseCreate> }>({
       query: ({ caseId, body }) => ({ url: `/cases/${caseId}`, method: "PATCH", body }),
@@ -392,6 +456,7 @@ export const opswardenApi = createApi({
         history: { role: "user" | "assistant"; text: string }[];
         pathname?: string;
         case_id?: string | null;
+        voice?: boolean;
       }
     >({
       query: ({ workspaceId, ...body }) => ({ url: `/workspaces/${workspaceId}/assistant/chat`, method: "POST", body }),
@@ -400,6 +465,18 @@ export const opswardenApi = createApi({
 });
 
 export const {
+  useRegisteredSuppliersQuery,
+  useCreateSupplierMutation,
+  useUpdateSupplierMutation,
+  useImportSuppliersMutation,
+  usePurchaseOrdersQuery,
+  useCreatePurchaseOrderMutation,
+  useUpdatePurchaseOrderMutation,
+  useUploadPurchaseOrderFileMutation,
+  useSearchQuery,
+  useSignupStartMutation,
+  useSignupResendMutation,
+  useSignupVerifyMutation,
   useClaimInvitationMutation,
   useAssistantChatMutation,
   useRequestPasswordResetMutation,

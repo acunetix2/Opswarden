@@ -7,6 +7,7 @@ import {
   Bell,
   Building,
   CheckCircle2,
+  ClipboardList,
   FileCheck,
   FileSearch,
   FileText,
@@ -58,9 +59,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Records",
     items: [
+      { href: "/app/suppliers", label: "Suppliers", icon: Building },
+      { href: "/app/purchase-orders", label: "Purchase orders", icon: ClipboardList },
       { href: "/app/findings", label: "Findings", icon: FileSearch },
       { href: "/app/documents", label: "Documents", icon: FileText },
-      { href: "/app/suppliers", label: "Suppliers", icon: Building },
     ],
   },
   {

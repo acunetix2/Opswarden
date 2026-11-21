@@ -60,8 +60,8 @@ export function SiteFooter() {
         <div className="flex flex-col gap-4 border-b border-white/10 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[18px] font-semibold tracking-[-0.01em]">Ready to run your first three-way match?</p>
           <div className="flex gap-2">
-            <Link href="/login" className="btn inline-flex h-10 items-center rounded-[8px] bg-brand px-4 text-[14px] font-medium text-on-brand hover:bg-brand-strong">
-              Sign in
+            <Link href="/signup" className="btn inline-flex h-10 items-center rounded-[8px] bg-brand px-4 text-[14px] font-medium text-on-brand hover:bg-brand-strong">
+              Create free account
             </Link>
             <Link href="/contact" className="btn inline-flex h-10 items-center gap-1 rounded-[8px] border border-white/20 px-4 text-[14px] font-medium hover:bg-white/10">
               Book a walkthrough

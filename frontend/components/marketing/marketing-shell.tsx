@@ -101,8 +101,8 @@ export function ClosingCta({ title = "See it on your own documents", text = "The
           <h2 className="max-w-xl text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] sm:text-[34px]">{title}</h2>
           <p className="mt-3 max-w-xl text-[16px] leading-relaxed text-[#F3EEE3]/75">{text}</p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <a href="/login" className="btn inline-flex h-11 items-center rounded-[8px] bg-brand px-5 text-[15px] font-medium text-on-brand hover:bg-brand-strong">
-              Sign in
+            <a href="/signup" className="btn inline-flex h-11 items-center rounded-[8px] bg-brand px-5 text-[15px] font-medium text-on-brand hover:bg-brand-strong">
+              Create free account
             </a>
             <a href="/contact" className="btn inline-flex h-11 items-center rounded-[8px] border border-white/20 px-5 text-[15px] font-medium hover:bg-white/10">
               Talk to us

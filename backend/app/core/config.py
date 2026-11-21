@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     tts_model: str = Field(default="")
     tts_voice: str = Field(default="")
 
+    # Speech-to-text for talking to Warden ("groq" uses Whisper with LLM_API_KEY; blank disables).
+    stt_provider: str = Field(default="groq")
+    stt_model: str = Field(default="whisper-large-v3-turbo")
+    stt_language: str = Field(default="")  # e.g. "en"; blank lets Whisper detect it
+
     # Call limits (see app/agents/llm_guard.py)
     llm_max_calls_per_hour: int = Field(default=60)
     llm_cache_ttl_seconds: int = Field(default=3600)
@@ -99,6 +104,16 @@ class Settings(BaseSettings):
     smtp_password: str = Field(default="")
     smtp_from: str = Field(default="")
     smtp_use_tls: bool = Field(default=True)
+
+    # Self-service sign-up: anyone can create an account and a new workspace they
+    # administer. It never grants access to an existing workspace; that needs an invitation.
+    allow_signup: bool = Field(default=True)
+    max_workspaces_per_user: int = Field(default=10)
+    # Sign-up email verification: a 6-digit code, valid for this long, with limited guesses and resends.
+    signup_code_ttl_minutes: int = Field(default=10)
+    signup_code_max_attempts: int = Field(default=5)
+    signup_code_max_sends: int = Field(default=5)
+    signup_code_resend_seconds: int = Field(default=30)
 
     # One-time links
     password_reset_ttl_minutes: int = Field(default=30)

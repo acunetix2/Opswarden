@@ -63,7 +63,16 @@ def create_email_draft(
     )
     rationale = investigation_service.build_summary(case.title, case.supplier_name, findings)
 
-    payload = {"subject": draft.subject, "body": draft.body, "recipient": None, "case_id": case.id}
+    # The address comes from the supplier register (entered by a person), never guessed.
+    recipient = None
+    if case.supplier_id:
+        from app.models.registry import Supplier
+
+        supplier = db.get(Supplier, case.supplier_id)
+        if supplier and supplier.workspace_id == case.workspace_id:
+            recipient = supplier.contact_email
+
+    payload = {"subject": draft.subject, "body": draft.body, "recipient": recipient, "case_id": case.id}
     rec = Recommendation(
         workspace_id=case.workspace_id,
         case_id=case.id,
@@ -101,7 +110,7 @@ def create_email_draft(
         status="draft",
         subject=draft.subject,
         body=draft.body,
-        recipient=None,
+        recipient=recipient,
         requires_human_review=True,
         ai_assisted=draft.ai_assisted,
         model=draft.model if draft.ai_assisted else None,

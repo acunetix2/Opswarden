@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { LandingCta } from "@/components/landing/landing-cta";
+import { LandingCta, SignInLink } from "@/components/landing/landing-cta";
 import { LogoMark } from "@/components/layout/logo";
 import { cn } from "@/lib/cn";
 
@@ -163,7 +163,8 @@ export function SiteHeader() {
           <Link href="/contact" className="hidden rounded-full px-3 py-1.5 text-[13.5px] text-ink-2 hover:text-ink xl:inline-flex">
             Talk to us
           </Link>
-          <LandingCta size="sm" />
+          <SignInLink />
+          <LandingCta size="sm" signup />
           <button
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
@@ -214,7 +215,7 @@ export function SiteHeader() {
               ),
             )}
             <div className="flex gap-2 pt-4">
-              <LandingCta className="h-11 flex-1" />
+              <LandingCta className="h-11 flex-1" signup />
               <Link href="/contact" className="btn inline-flex h-11 flex-1 items-center justify-center rounded-[8px] border border-line-strong bg-surface text-[15px] font-medium text-ink">
                 Talk to us
               </Link>

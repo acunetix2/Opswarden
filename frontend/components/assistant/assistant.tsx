@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowUpRight, RotateCcw, SendHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowUpRight, Mic, RotateCcw, SendHorizontal, SkipForward, Sparkles, Square, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { SpeakButton } from "@/components/ui/speak-button";
+import { toAppError } from "@/lib/api-error";
 import { answer, STARTER_SUGGESTIONS, type AssistantLink } from "@/lib/assistant";
 import { cn } from "@/lib/cn";
+import { openMicrophone, recordTurn, speak, transcribe, voiceSupported } from "@/lib/voice";
 import { formatMoneyValue } from "@/lib/format";
 import {
   useAllFindingsQuery,
@@ -18,7 +20,7 @@ import {
   useOverviewQuery,
   useSettingsQuery,
 } from "@/store/api";
-import { useWorkspace } from "@/store/hooks";
+import { useAppSelector, useWorkspace } from "@/store/hooks";
 
 import { WardenIcon } from "./warden-icon";
 
@@ -29,11 +31,23 @@ interface Message {
   links?: AssistantLink[];
   suggestions?: string[];
   ai?: boolean;
+  /** The user said this out loud. */
+  spoken?: boolean;
 }
+
+type VoiceState = "off" | "listening" | "hearing" | "transcribing" | "thinking" | "speaking";
+
+const VOICE_LABEL: Record<Exclude<VoiceState, "off">, string> = {
+  listening: "Listening. Go ahead and ask.",
+  hearing: "Listening…",
+  transcribing: "Got it…",
+  thinking: "Thinking…",
+  speaking: "Speaking. Tap Skip to interrupt.",
+};
 
 const GREETING: Omit<Message, "id"> = {
   from: "warden",
-  text: "Hi, I'm Warden. Ask me what needs your attention, look up a case, supplier or PO number, list high-severity findings or waiting approvals, or ask how to do anything in OpsWarden.",
+  text: "Hi, I'm Warden, OpsWarden's assistant. Ask me what needs your attention, look up a case, supplier or PO number, list high-severity findings or waiting approvals, or ask how to do anything. You can also tap the microphone and just talk.",
   suggestions: STARTER_SUGGESTIONS,
 };
 
@@ -66,6 +80,26 @@ export function Assistant() {
   const [askModel] = useAssistantChatMutation();
   const aiOn = Boolean(settings?.llm_configured);
   const ttsOn = Boolean(settings?.tts_available);
+  const token = useAppSelector((s) => s.session.token);
+  const [micOk, setMicOk] = useState(false);
+  useEffect(() => setMicOk(voiceSupported()), []);
+  // Shown whenever the server can transcribe; disabled (with the reason) where the browser can't record.
+  const voiceAvailable = aiOn && Boolean(settings?.stt_available);
+  const micBlockedReason = micOk
+    ? null
+    : typeof window !== "undefined" && !window.isSecureContext
+      ? "Voice needs a secure address. Open OpsWarden on https:// or localhost to talk to Warden."
+      : "This browser can't record audio. Try a recent Chrome, Edge, Safari or Firefox.";
+
+  // Voice conversation state. Refs keep the async loop reading current values.
+  const [voice, setVoice] = useState<VoiceState>("off");
+  const [level, setLevel] = useState(0);
+  const voiceOnRef = useRef(false);
+  const thinkingRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const turnAbortRef = useRef<AbortController | null>(null);
+  const speakAbortRef = useRef<AbortController | null>(null);
+  const sendRef = useRef<((text: string, opts?: { voice?: boolean }) => Promise<string | null>) | null>(null);
 
   const toggle = useCallback((next?: boolean) => setOpen((o) => (next === undefined ? !o : next)), []);
 
@@ -93,12 +127,19 @@ export function Assistant() {
     setMessages((prev) => [...prev, { ...m, id: nextId++ }]);
   }
 
-  async function send(text: string) {
+  /** Sends a message and returns Warden's reply text (used by voice mode to read it aloud). */
+  async function send(text: string, opts: { voice?: boolean } = {}): Promise<string | null> {
     const q = text.trim();
-    if (!q || thinking) return;
+    if (!q || thinkingRef.current) return null;
+    thinkingRef.current = true;
     setDraft("");
-    push({ from: "user", text: q });
+    push({ from: "user", text: q, spoken: opts.voice });
     setThinking(true);
+    const finish = (reply: string) => {
+      thinkingRef.current = false;
+      setThinking(false);
+      return reply;
+    };
 
     const m = overview.data?.metrics;
     const local = answer(q, {
@@ -133,11 +174,17 @@ export function Assistant() {
           .map((x) => ({ role: x.from === "user" ? ("user" as const) : ("assistant" as const), text: x.text.slice(0, 2500) }));
         const caseMatch = /^\/app\/investigations\/([^/]+)/.exec(pathname);
         const caseId = caseMatch && caseMatch[1] !== "new" ? caseMatch[1] : null;
-        const res = await askModel({ workspaceId: workspace.id, message: q.slice(0, 1000), history, pathname, case_id: caseId }).unwrap();
+        const res = await askModel({
+          workspaceId: workspace.id,
+          message: q.slice(0, 1000),
+          history,
+          pathname,
+          case_id: caseId,
+          voice: opts.voice,
+        }).unwrap();
         if (res.reply) {
           push({ from: "warden", text: res.reply, ai: true, links: res.links });
-          setThinking(false);
-          return;
+          return finish(res.reply);
         }
       } catch {
         // Fall through to the built-in answer.
@@ -147,15 +194,93 @@ export function Assistant() {
       await new Promise((r) => window.setTimeout(r, 280));
     }
 
-    push({
-      from: "warden",
-      text: aiOn && !local.navigate ? `The AI model didn't answer just now, so here's the built-in answer.\n\n${local.text}` : local.text,
-      links: local.links,
-      suggestions: local.suggestions,
-    });
-    setThinking(false);
+    const fallback = aiOn && !local.navigate ? `The AI model didn't answer just now, so here's the built-in answer.\n\n${local.text}` : local.text;
+    push({ from: "warden", text: fallback, links: local.links, suggestions: local.suggestions });
     if (local.navigate && local.navigate !== pathname) router.push(local.navigate);
+    return finish(local.text);
   }
+  sendRef.current = send;
+
+  // ---- Voice conversation ---------------------------------------------------------
+  // Hands-free loop: listen until the person pauses, transcribe, answer, read the answer
+  // aloud, then listen again. Ends on "stop"/"goodbye", two silent turns, or the End button.
+  const STOP_WORDS = /^(stop|stop listening|that'?s all|that is all|goodbye|bye|bye warden|thanks,? that'?s all|end( conversation)?|never ?mind)[.!]?$/i;
+
+  const stopVoice = useCallback(() => {
+    voiceOnRef.current = false;
+    turnAbortRef.current?.abort();
+    speakAbortRef.current?.abort();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setVoice("off");
+    setLevel(0);
+  }, []);
+
+  async function startVoice() {
+    if (voiceOnRef.current) return;
+    let stream: MediaStream;
+    try {
+      stream = await openMicrophone();
+    } catch (err) {
+      push({ from: "warden", text: toAppError(err).message });
+      return;
+    }
+    streamRef.current = stream;
+    voiceOnRef.current = true;
+    let quietTurns = 0;
+
+    while (voiceOnRef.current) {
+      const turn = new AbortController();
+      turnAbortRef.current = turn;
+      setVoice("listening");
+      let heard = "";
+      try {
+        const rec = await recordTurn(stream, { signal: turn.signal, onLevel: setLevel, onSpeechStart: () => setVoice("hearing") });
+        if (!voiceOnRef.current) break;
+        if (rec.heardSpeech) {
+          setVoice("transcribing");
+          heard = await transcribe(token, workspace.id, rec.blob);
+        }
+      } catch (err) {
+        if (!voiceOnRef.current || (err as DOMException)?.name === "AbortError") break;
+        push({ from: "warden", text: toAppError(err).message });
+        break;
+      }
+      if (!voiceOnRef.current) break;
+
+      if (!heard) {
+        quietTurns += 1;
+        if (quietTurns >= 2) {
+          push({ from: "warden", text: "I didn't hear anything, so I've stopped listening. Tap the microphone to talk again." });
+          break;
+        }
+        continue;
+      }
+      quietTurns = 0;
+
+      if (STOP_WORDS.test(heard.trim())) {
+        push({ from: "user", text: heard, spoken: true });
+        push({ from: "warden", text: "Okay. Tap the microphone whenever you want to talk again." });
+        await speak("Okay. Talk soon.", { token, workspaceId: workspace.id, serverVoice: ttsOn });
+        break;
+      }
+
+      setVoice("thinking");
+      const reply = await sendRef.current?.(heard, { voice: true });
+      if (!voiceOnRef.current || !reply) continue;
+
+      const speaking = new AbortController();
+      speakAbortRef.current = speaking;
+      setVoice("speaking");
+      await speak(reply, { token, workspaceId: workspace.id, serverVoice: ttsOn, signal: speaking.signal });
+    }
+    stopVoice();
+  }
+
+  useEffect(() => {
+    if (!open) stopVoice();
+  }, [open, stopVoice]);
+  useEffect(() => stopVoice, [stopVoice]);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -213,7 +338,8 @@ export function Assistant() {
                       m.from === "user" ? "rounded-br-[2px] bg-ink text-canvas" : "rounded-bl-[2px] border border-line bg-surface text-ink",
                     )}
                   >
-                    {m.from === "warden" ? <span className="sr-only">Warden: </span> : <span className="sr-only">You: </span>}
+                    {m.from === "warden" ? <span className="sr-only">Warden: </span> : <span className="sr-only">You{m.spoken ? " said" : ""}: </span>}
+                    {m.spoken ? <Mic aria-hidden className="mr-1.5 inline size-3 -translate-y-px opacity-60" /> : null}
                     {m.text}
                     {m.from === "warden" && m.id !== 0 ? (
                       <span className="mt-1.5 flex items-center gap-1.5">
@@ -271,6 +397,40 @@ export function Assistant() {
             </div>
           ) : null}
 
+          {voice !== "off" ? (
+            <div className="border-t border-line bg-surface p-3" role="region" aria-label="Voice conversation">
+              <div className="flex items-center gap-3 rounded-[12px] border border-brand/30 bg-brand-tint/60 px-3 py-2.5">
+                <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-brand text-on-brand">
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 rounded-full bg-brand/35 transition-transform duration-100"
+                    style={{ transform: `scale(${1 + (voice === "hearing" || voice === "listening" ? level * 0.8 : voice === "speaking" ? 0.25 : 0)})` }}
+                  />
+                  <Mic className="relative size-[18px]" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-ink" role="status" aria-live="polite">{VOICE_LABEL[voice]}</p>
+                  <p className="text-[11.5px] text-ink-3">Say &ldquo;stop&rdquo; or &ldquo;goodbye&rdquo; to end, or keep talking.</p>
+                </div>
+                {voice === "speaking" ? (
+                  <button
+                    type="button"
+                    onClick={() => speakAbortRef.current?.abort()}
+                    className="pressable inline-flex items-center gap-1 rounded-[8px] border border-line-strong bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink hover:border-ink-3"
+                  >
+                    <SkipForward className="size-3.5" aria-hidden /> Skip
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={stopVoice}
+                  className="pressable inline-flex items-center gap-1 rounded-[8px] bg-ink px-2.5 py-1.5 text-[12px] font-medium text-canvas hover:bg-ink/85"
+                >
+                  <Square className="size-3 fill-current" aria-hidden /> End
+                </button>
+              </div>
+            </div>
+          ) : (
           <form onSubmit={onSubmit} className="flex items-end gap-2 border-t border-line bg-surface p-3">
             <label htmlFor="warden-input" className="sr-only">Message Warden</label>
             <textarea
@@ -283,6 +443,18 @@ export function Assistant() {
               placeholder="Ask Warden, or say “take me to approvals”"
               className="max-h-28 min-h-10 flex-1 resize-none rounded-[10px] border border-line bg-canvas px-3 py-2.5 text-[13.5px] text-ink placeholder:text-ink-3 focus-visible:border-ink-3 focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgb(217_84_30/0.18)]"
             />
+            {voiceAvailable ? (
+              <button
+                type="button"
+                onClick={() => (micBlockedReason ? push({ from: "warden", text: micBlockedReason }) : void startVoice())}
+                disabled={thinking}
+                aria-label="Talk to Warden"
+                title={micBlockedReason ?? "Talk to Warden"}
+                className="btn grid size-10 shrink-0 cursor-pointer place-items-center rounded-[10px] border border-line-strong bg-surface text-ink hover:-translate-y-px hover:border-ink-3 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Mic className="size-4" aria-hidden />
+              </button>
+            ) : null}
             <button
               type="submit"
               disabled={!draft.trim() || thinking}
@@ -292,6 +464,7 @@ export function Assistant() {
               <SendHorizontal className="size-4" aria-hidden />
             </button>
           </form>
+          )}
         </section>
       ) : null}
 

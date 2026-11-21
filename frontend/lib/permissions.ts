@@ -13,6 +13,7 @@ export type Permission =
   | "request_approval"
   | "decide_approval"
   | "execute_action"
+  | "manage_register"
   | "manage_workspace";
 
 const MATRIX: Record<Role, ReadonlySet<Permission>> = {
@@ -25,6 +26,7 @@ const MATRIX: Record<Role, ReadonlySet<Permission>> = {
     "request_approval",
     "decide_approval",
     "execute_action",
+    "manage_register",
     "manage_workspace",
   ]),
   reviewer: new Set<Permission>([
@@ -36,6 +38,7 @@ const MATRIX: Record<Role, ReadonlySet<Permission>> = {
     "request_approval",
     "decide_approval",
     "execute_action",
+    "manage_register",
   ]),
   contributor: new Set<Permission>(["create_case", "upload_document", "correct_fields"]),
 };

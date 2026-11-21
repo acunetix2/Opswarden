@@ -48,6 +48,8 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
           subject: d.subject,
           body: d.body,
           recipient: d.recipient,
+          // An address from the supplier register was entered and checked by a person already.
+          recipientVerified: Boolean(d.recipient && d.recipient === kase.supplier_contact_email),
           aiModel: d.ai_assisted ? d.model : null,
         }),
       );
@@ -185,9 +187,11 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
             <p id="email-recipient-hint" className={recipientInvalid ? "text-[12px] text-danger" : "text-[12px] text-ink-3"}>
               {recipientInvalid
                 ? "Enter a valid email address."
-                : "OpsWarden never guesses supplier addresses. Leave it blank to export, or enter one you've confirmed."}
+                : recipient && recipient === kase.supplier_contact_email
+                  ? `From the supplier register for ${kase.supplier_name ?? "this supplier"}.`
+                  : "OpsWarden never guesses supplier addresses. Leave it blank to export, or enter one you've confirmed."}
             </p>
-            {recipient && !recipientInvalid && !locked ? (
+            {recipient && !recipientInvalid && !locked && recipient !== kase.supplier_contact_email ? (
               <Checkbox
                 checked={draft.recipientVerified}
                 onChange={(v) => dispatch(draftEdited({ caseId: kase.id, changes: { recipientVerified: v } }))}
@@ -207,7 +211,12 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
                   variant="accent"
                   onClick={onRequest}
                   loading={reqState.isLoading}
-                  disabled={!draft.subject.trim() || !draft.body.trim() || recipientInvalid || (Boolean(recipient) && !draft.recipientVerified)}
+                  disabled={
+                    !draft.subject.trim() ||
+                    !draft.body.trim() ||
+                    recipientInvalid ||
+                    (Boolean(recipient) && recipient !== kase.supplier_contact_email && !draft.recipientVerified)
+                  }
                 >
                   Request approval
                 </Button>

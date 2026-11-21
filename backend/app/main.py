@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api.errors import ApiError
-from app.api.routes import activity, approvals, assistant, auth, cases, documents, events, findings, team, workspaces
+from app.api.routes import activity, approvals, assistant, auth, cases, documents, events, findings, registry, team, workspaces
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.db import init_db
@@ -134,3 +134,4 @@ app.include_router(activity.router, prefix=API_PREFIX)
 app.include_router(team.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(assistant.router, prefix=API_PREFIX)
+app.include_router(registry.router, prefix=API_PREFIX)

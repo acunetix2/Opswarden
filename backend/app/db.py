@@ -72,3 +72,26 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    add_missing_nullable_columns()
+
+
+def add_missing_nullable_columns() -> list[str]:
+    """Additive schema upgrade: create_all never alters existing tables, so new
+    nullable columns on existing tables are added here. Never drops or rewrites."""
+    from sqlalchemy import inspect, text
+
+    added: list[str] = []
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have or not col.nullable:
+                    continue
+                ddl = col.type.compile(dialect=engine.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
+                added.append(f"{table.name}.{col.name}")
+    return added

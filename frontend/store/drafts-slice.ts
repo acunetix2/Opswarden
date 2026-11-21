@@ -21,10 +21,19 @@ export const draftsSlice = createSlice({
   reducers: {
     draftStarted(
       state,
-      action: PayloadAction<{ caseId: string; recommendationId: string; subject: string; body: string; recipient: string | null; aiModel: string | null }>,
+      action: PayloadAction<{
+        caseId: string;
+        recommendationId: string;
+        subject: string;
+        body: string;
+        recipient: string | null;
+        /** True when the address comes from the supplier register. */
+        recipientVerified?: boolean;
+        aiModel: string | null;
+      }>,
     ) {
-      const { caseId, recommendationId, subject, body, recipient, aiModel } = action.payload;
-      state[caseId] = { recommendationId, subject, body, recipient: recipient ?? "", recipientVerified: false, submittedApprovalId: null, aiModel };
+      const { caseId, recommendationId, subject, body, recipient, recipientVerified = false, aiModel } = action.payload;
+      state[caseId] = { recommendationId, subject, body, recipient: recipient ?? "", recipientVerified, submittedApprovalId: null, aiModel };
     },
     draftEdited(state, action: PayloadAction<{ caseId: string; changes: Partial<Pick<EmailDraftState, "subject" | "body" | "recipient" | "recipientVerified">> }>) {
       const d = state[action.payload.caseId];

@@ -53,6 +53,9 @@ export interface Case {
   title: string;
   supplier_name: string | null;
   supplier_reference: string | null;
+  supplier_id?: string | null;
+  purchase_order_id?: string | null;
+  supplier_contact_email?: string | null;
   currency: string;
   notes: string | null;
   status: CaseStatus;
@@ -88,6 +91,7 @@ export interface WorkspaceSettings {
   accepted_extensions: string[];
   ocr_available: boolean;
   tts_available?: boolean;
+  stt_available?: boolean;
   email_configured: boolean;
   email_sender: string | null;
   llm_configured: boolean;
@@ -101,6 +105,9 @@ export interface CaseCreate {
   supplier_reference?: string | null;
   currency: string;
   notes?: string | null;
+  /** Registered supplier / purchase order; the PO's file is attached to the new case. */
+  supplier_id?: string | null;
+  purchase_order_id?: string | null;
 }
 
 export interface OverviewMetrics {
@@ -391,4 +398,91 @@ export interface WorkspaceFinding {
   currency: string | null;
   status: FindingStatus;
   created_at: string;
+}
+
+/** POST /auth/signup/start and /auth/signup/resend. */
+export interface SignupStart {
+  verification_id: string;
+  email: string;
+  expires_in_seconds: number;
+  resend_after_seconds: number;
+  /** Development only, when the server has no email provider. */
+  dev_code: string | null;
+}
+
+// ---- Supplier and purchase-order register -------------------------------------
+
+export interface RegisteredSupplier {
+  id: string;
+  name: string;
+  supplier_code: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  phone: string | null;
+  default_currency: string;
+  payment_terms: string | null;
+  address: string | null;
+  notes: string | null;
+  is_active: boolean;
+  open_purchase_orders: number;
+  total_cases: number;
+  open_cases: number;
+  active_findings: number;
+  exposure: Money[];
+  last_activity_at: string | null;
+  created_at: string;
+}
+
+export interface SupplierInput {
+  name: string;
+  supplier_code?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  phone?: string | null;
+  default_currency: string;
+  payment_terms?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+}
+
+export type PurchaseOrderStatus = "open" | "received" | "closed" | "cancelled";
+
+export interface PurchaseOrder {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  po_number: string;
+  order_date: string | null;
+  expected_delivery_date: string | null;
+  currency: string;
+  total_amount: string | null;
+  description: string | null;
+  status: PurchaseOrderStatus;
+  has_file: boolean;
+  original_filename: string | null;
+  size_bytes: number | null;
+  case_count: number;
+  latest_case_id: string | null;
+  created_at: string;
+}
+
+export interface PurchaseOrderInput {
+  supplier_id: string;
+  po_number: string;
+  order_date?: string | null;
+  expected_delivery_date?: string | null;
+  currency?: string | null;
+  total_amount?: string | null;
+  description?: string | null;
+  status?: PurchaseOrderStatus;
+}
+
+export interface SearchHit {
+  kind: "case" | "supplier" | "purchase_order" | "finding" | "document";
+  id: string;
+  title: string;
+  subtitle: string | null;
+  href: string;
+  badge: string | null;
 }

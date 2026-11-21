@@ -1,10 +1,11 @@
 "use client";
 
 import { Check, ChevronsUpDown, Keyboard, LogOut, Moon, Sun } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
+import { useTheme } from "@/lib/use-theme";
 import { ROLE_DESCRIPTIONS } from "@/lib/permissions";
 import { useDismiss } from "@/lib/use-dismiss";
 import { useSession } from "@/store/hooks";
@@ -18,20 +19,7 @@ export function UserMenu({ collapsedClass }: { collapsedClass?: string }) {
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
 
-  // The inline script in app/layout.tsx applies the saved theme before paint; read it back here.
-  const [dark, setDark] = useState(false);
-  useEffect(() => setDark(document.documentElement.dataset.theme === "dark"), []);
-  function toggleTheme() {
-    const next = !dark;
-    setDark(next);
-    if (next) document.documentElement.dataset.theme = "dark";
-    else delete document.documentElement.dataset.theme;
-    try {
-      window.localStorage.setItem("ow-theme", next ? "dark" : "light");
-    } catch {
-      // Storage disabled: the theme still applies until reload.
-    }
-  }
+  const { dark, toggle: toggleTheme } = useTheme();
 
   if (!user || !workspace) return null;
 

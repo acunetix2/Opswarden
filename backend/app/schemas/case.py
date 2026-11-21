@@ -6,11 +6,16 @@ from pydantic import BaseModel, Field
 
 
 class CaseCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=300)
+    # Optional when opening from a registered purchase order (a title is generated).
+    title: str | None = Field(default=None, max_length=300)
     supplier_name: str | None = Field(default=None, max_length=300)
     supplier_reference: str | None = Field(default=None, max_length=100)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
     notes: str | None = None
+    # Registered supplier / purchase order. With a PO, supplier, reference and currency
+    # come from the register and the PO's file (if any) is attached to the case.
+    supplier_id: str | None = Field(default=None, max_length=64)
+    purchase_order_id: str | None = Field(default=None, max_length=64)
 
 
 class CasePatch(BaseModel):
@@ -19,6 +24,8 @@ class CasePatch(BaseModel):
     supplier_reference: str | None = Field(default=None, max_length=100)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     notes: str | None = None
+    supplier_id: str | None = Field(default=None, max_length=64)
+    purchase_order_id: str | None = Field(default=None, max_length=64)
 
 
 class CaseOut(BaseModel):
@@ -28,6 +35,9 @@ class CaseOut(BaseModel):
     title: str
     supplier_name: str | None
     supplier_reference: str | None
+    supplier_id: str | None = None
+    purchase_order_id: str | None = None
+    supplier_contact_email: str | None = None
     currency: str
     notes: str | None
     status: str

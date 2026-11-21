@@ -19,6 +19,9 @@ class Case(Base):
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     supplier_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     supplier_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Registered supplier / purchase order the case was opened from (optional; names stay as typed for older cases).
+    supplier_id: Mapped[str | None] = mapped_column(GUID, ForeignKey("suppliers.id"), index=True, nullable=True)
+    purchase_order_id: Mapped[str | None] = mapped_column(GUID, ForeignKey("purchase_orders.id"), index=True, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")

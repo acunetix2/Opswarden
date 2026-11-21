@@ -44,7 +44,8 @@ def supabase_mode(monkeypatch):
 
 
 def test_auth_config_reports_provider(client, supabase_mode):
-    assert client.get("/api/v1/auth/config").json() == {"provider": "supabase"}
+    # Self-service sign-up is local-auth only, so it's reported off in Supabase mode.
+    assert client.get("/api/v1/auth/config").json() == {"provider": "supabase", "allow_signup": False}
 
 
 def test_valid_token_maps_existing_user_by_email(client, supabase_mode):

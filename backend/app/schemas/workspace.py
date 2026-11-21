@@ -79,6 +79,7 @@ class WorkspaceSettingsOut(BaseModel):
     accepted_extensions: list[str]
     ocr_available: bool
     tts_available: bool = False
+    stt_available: bool = False
     email_configured: bool
     email_sender: str | None = None
     llm_configured: bool

@@ -39,7 +39,7 @@ from app.schemas.workspace import (
     WorkspaceSettingsUpdate,
 )
 from app.agents.llm_provider import get_llm_provider
-from app.services import ocr_service, tts_service
+from app.services import ocr_service, stt_service, tts_service
 from app.core.config import settings as app_settings
 from app.integrations.email.provider import get_email_provider
 
@@ -216,6 +216,7 @@ def _settings_out(db: Session, workspace_id: str, role: str) -> WorkspaceSetting
         accepted_extensions=[".pdf", ".json", ".txt", ".png", ".jpg", ".jpeg"],
         ocr_available=ocr_service.available(),
         tts_available=tts_service.available(),
+        stt_available=stt_service.available(),
         email_configured=get_email_provider().configured,
         email_sender=app_settings.smtp_from or None,
         llm_configured=get_llm_provider().configured,

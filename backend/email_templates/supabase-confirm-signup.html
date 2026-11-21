@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Your OpsWarden verification code</title>
+  <!--[if mso]>
+  <style>table, td, p, a, span, h1 { font-family: Arial, sans-serif !important; }</style>
+  <![endif]-->
+</head>
+<body style="margin:0; padding:0; width:100%; background-color:#F4F1EA;">
+
+  <!-- Preview text shown in the inbox list -->
+  <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+    Your verification code is {{ .Token }}. It expires in 10 minutes.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F4F1EA" style="background-color:#F4F1EA;">
+    <tr>
+      <td align="center" style="padding:40px 16px 48px 16px;">
+
+        <!--[if mso]><table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+
+          <!-- Header: navy band with the wordmark, orange rule underneath -->
+          <tr>
+            <td align="center" bgcolor="#11151C" style="background-color:#11151C; border-radius:10px 10px 0 0; padding:26px 24px 24px 24px;">
+              <a href="{{ .SiteURL }}" style="text-decoration:none; color:#F3EEE3;">
+                <span style="font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:22px; font-weight:700; letter-spacing:-0.3px; color:#F3EEE3;">Ops</span><span style="font-family:Georgia, 'Times New Roman', serif; font-size:23px; font-style:italic; color:#F3EEE3;">Warden</span>
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#EE6A24" style="background-color:#EE6A24; height:3px; font-size:0; line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td align="center" bgcolor="#FFFFFF" style="background-color:#FFFFFF; border:1px solid #E6E0D4; border-top:0; border-radius:0 0 10px 10px; padding:44px 40px 40px 40px;">
+
+              <h1 style="margin:0 0 12px 0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:22px; font-weight:600; line-height:30px; color:#11151C; text-align:center;">
+                Confirm your email address
+              </h1>
+
+              <p style="margin:0 auto 32px auto; max-width:380px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#3F444D; text-align:center;">
+                Enter this code on the sign-up page to finish creating your OpsWarden account.
+              </p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" bgcolor="#FDF3EC" style="background-color:#FDF3EC; border:1px solid #F4C9AE; border-radius:8px; padding:18px 22px 18px 32px;">
+                    <span style="font-family:'SF Mono', Menlo, Consolas, 'Courier New', monospace; font-size:32px; font-weight:700; line-height:38px; letter-spacing:10px; color:#11151C;">{{ .Token }}</span>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0 0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#6B6F76; text-align:center;">
+                This code expires in <span style="color:#C2471A; font-weight:600;">10 minutes</span> and can only be used once.
+              </p>
+
+              <!-- Divider -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 24px 0;">
+                <tr><td style="border-top:1px solid #EFEBE3; font-size:0; line-height:0;">&nbsp;</td></tr>
+              </table>
+
+              <p style="margin:0 auto; max-width:400px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:21px; color:#6B6F76; text-align:center;">
+                If you didn't try to create an account, you can safely ignore this email. For your security, never share this code with anyone.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:32px 16px 0 16px;">
+
+              <p style="margin:0 0 14px 0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#6B6F76; text-align:center;">
+                Questions? Email us at
+                <a href="mailto:support@opswarden.aventorgo.xyz" style="color:#C2471A; text-decoration:none; font-weight:600;">support@opswarden.aventorgo.xyz</a>
+              </p>
+
+              <p style="margin:0 0 18px 0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#6B6F76; text-align:center;">
+                <a href="{{ .SiteURL }}/resources" style="color:#3F444D; text-decoration:none;">Help center</a>
+                <span style="color:#C9C1B2;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                <a href="{{ .SiteURL }}/legal/privacy" style="color:#3F444D; text-decoration:none;">Privacy policy</a>
+                <span style="color:#C9C1B2;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                <a href="{{ .SiteURL }}/legal/terms" style="color:#3F444D; text-decoration:none;">Terms of service</a>
+              </p>
+
+              <p style="margin:0 0 4px 0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; line-height:18px; color:#9A968D; text-align:center;">
+                This email was sent to {{ .Email }} because it was used to sign up for OpsWarden.
+              </p>
+              <p style="margin:0; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; line-height:18px; color:#9A968D; text-align:center;">
+                &copy; 2026 OpsWarden. All rights reserved.
+              </p>
+
+            </td>
+          </tr>
+
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

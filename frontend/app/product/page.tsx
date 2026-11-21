@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BadgeCheck, FileSearch, FileText, History, MessageSquareText, ScanSearch, Signature, Users } from "lucide-react";
 
+import { LandingCta } from "@/components/landing/landing-cta";
 import { MatchDemo } from "@/components/landing/match-demo";
 import { Reveal } from "@/components/landing/reveal";
 import { ClosingCta, InfoCard, MarketingShell, PageHero, Section } from "@/components/marketing/marketing-shell";
@@ -30,7 +31,7 @@ export default function ProductPage() {
         title="Every invoice checked against what was ordered and delivered"
         intro="OpsWarden turns three documents into a clear answer: do they agree, and if not, exactly where and by how much. Then it helps your team settle it with the supplier, on the record."
       >
-        <ButtonLink href="/login" variant="accent" className="h-11 px-5 text-[15px]">Sign in</ButtonLink>
+        <LandingCta signup className="h-11 px-5 text-[15px]" />
         <ButtonLink href="/how-it-works" variant="secondary" className="h-11 px-5 text-[15px]">How it works</ButtonLink>
       </PageHero>
 
