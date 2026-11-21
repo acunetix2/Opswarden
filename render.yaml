@@ -1,0 +1,94 @@
+# Render Blueprint for the OpsWarden API.
+# Render dashboard > New > Blueprint > pick this repository.
+# Values marked "sync: false" are asked for once, when the Blueprint is first created.
+# Later additions must be added by hand under the service's Environment tab.
+
+services:
+  - type: web
+    name: opswarden-api
+    runtime: python
+    rootDir: backend
+    # Frankfurt is the closest Render region to the Supabase project (eu-west-1).
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      # ---- Runtime ----
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: OPSWARDEN_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SEED_DEMO_DATA
+        value: "false"
+
+      # ---- Frontend that may call this API (exact origin, no trailing slash) ----
+      - key: FRONTEND_ORIGIN
+        sync: false
+
+      # ---- Database: Supabase session pooler URL (Render has no IPv6, so not db.<ref>.supabase.co) ----
+      - key: DATABASE_URL
+        sync: false
+
+      # ---- Sign-in ----
+      - key: AUTH_PROVIDER
+        value: local
+
+      # ---- Documents: Cloudflare R2 (private bucket) ----
+      - key: STORAGE_BACKEND
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      # Add R2_JURISDICTION=eu only if the bucket was created with the EU jurisdiction.
+      - key: R2_PREFIX
+        value: documents/
+
+      # ---- AI: Groq for the assistant and email wording ----
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_API_KEY
+        sync: false
+
+      # ---- AI: Gemini for OCR and read-aloud ----
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OCR_PROVIDER
+        value: gemini
+      - key: OCR_MODEL
+        value: gemini-3.5-flash
+      - key: TTS_PROVIDER
+        value: gemini
+      - key: TTS_MODEL
+        value: gemini-2.5-flash-preview-tts
+      - key: TTS_VOICE
+        value: Kore
+
+      # ---- Email: Brevo. Free Render instances block ports 25/465/587, so use 2525. ----
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "2525"
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
