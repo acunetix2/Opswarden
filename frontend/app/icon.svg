@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#4a5568"/>
+      <stop offset="0.45" stop-color="#252e3b"/>
+      <stop offset="1" stop-color="#10151d"/>
+    </linearGradient>
+    <linearGradient id="i" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#263244"/>
+      <stop offset="1" stop-color="#0a0e14"/>
+    </linearGradient>
+    <linearGradient id="c" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c3ccd8"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0" y1="0.5" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#d9321a"/>
+      <stop offset="0.55" stop-color="#ee6a24"/>
+      <stop offset="1" stop-color="#f6b233"/>
+    </linearGradient>
+  </defs>
+  <path d="M48.5 19.6c8.6.7 13.2 4.3 11 9.9-1.3-2.6-4.7-4.6-9.5-5.4z" fill="url(#r)"/>
+  <path d="M30 5.5 49.5 12v18c0 13.6-8.1 22.8-19.5 28.5C18.6 52.8 10.5 43.6 10.5 30V12z" fill="url(#s)"/>
+  <path d="M30 10.4 45.2 15.6V30c0 11-6.5 18.7-15.2 23.4C21.3 48.7 14.8 41 14.8 30V15.6z" fill="url(#i)"/>
+  <path d="M14.8 15.6 30 10.4l15.2 5.2v4.6c-7.4-3-22.6-3-30.4 1.6z" fill="#ffffff" opacity="0.08"/>
+  <path d="m20.4 30.6 7.1 7.1 13.2-15.3" fill="none" stroke="url(#c)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M7.2 32.6c-3.6 7.6 4.6 14.2 20 13.1 13.4-1 26.5-7.6 32.3-16.2-7.5 6.6-20.4 11.3-31.9 12-12.6.8-19.2-2.7-20.4-8.9z" fill="url(#r)"/>
+  <rect x="50.5" y="3.5" width="5" height="5" rx="0.8" fill="#ee6a24"/>
+  <rect x="57" y="1.5" width="3" height="3" rx="0.5" fill="#d9321a"/>
+  <rect x="56" y="8.5" width="4.2" height="4.2" rx="0.6" fill="#e9501f"/>
+  <rect x="61" y="6" width="2.6" height="2.6" rx="0.4" fill="#f6a12d"/>
+  <rect x="58.3" y="14.2" width="2.6" height="2.6" rx="0.4" fill="#d9321a"/>
+</svg>

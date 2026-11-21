@@ -1,0 +1,46 @@
+# ---- Secrets: never commit real environment files ----
+.env
+.env.*
+!.env.example
+*.bak
+*.pem
+*.key
+
+# ---- Dependencies and build output ----
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+
+# ---- Local data ----
+*.db
+*.sqlite3
+backend/_storage/
+
+# ---- Machine-local tool state (the .kiro folder itself is committed) ----
+.kiro/learning/
+.claude/
+.cursor/
+.github/hooks/
+.github/instructions/
+.github/copilot-instructions.md
+CLAUDE.md
+
+# ---- Local working notes ----
+REAL_USE_GAPS.md
+PRODUCTION_READINESS.md
+EXTRACTION_HARDENING_PLAN.md
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
