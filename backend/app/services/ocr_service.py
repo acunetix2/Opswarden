@@ -126,12 +126,13 @@ def extract(data: bytes, mime_type: str, document_type: str) -> OCRResult:
     doc = StructuredDocument(
         schema_version=SCHEMA_VERSION,
         document_type=document_type,  # type: ignore[arg-type]
-        **{k: _as_str(raw.get(k)) for k in StructuredDocument.model_fields if k not in ("schema_version", "document_type", "line_items")},
+        # Text fields only: boxes are a list and get their own validation below.
+        **{k: _as_str(raw.get(k)) for k in _TOP_FIELDS},
         line_items=items,
+        boxes=parse_boxes(raw.get("boxes"), row_map),
     )
     if doc.currency:
         doc.currency = doc.currency.upper()[:3]
-    doc.boxes = parse_boxes(raw.get("boxes"), row_map)
     if not items and not any(getattr(doc, k) for k in ("document_number", "supplier_name", "grand_total")):
         raise OCRError("OCR_NO_CONTENT", "No procurement details were found in this document.")
 
