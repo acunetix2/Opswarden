@@ -7,7 +7,8 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 import type { CaseStreamEvent } from "./types";
 
-const TERMINAL = new Set(["investigation.completed", "analysis.failed"]);
+// The run ends after the follow-up step (letters, emails, closing clean cases) reports.
+const TERMINAL = new Set(["automation.completed", "analysis.failed"]);
 
 /** Parses `text/event-stream` frames out of a growing buffer. */
 function takeFrames(buffer: string): { frames: { event: string; data: string }[]; rest: string } {

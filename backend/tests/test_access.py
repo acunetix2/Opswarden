@@ -292,7 +292,10 @@ def test_smtp_send_happens_once(client, monkeypatch):
         second = client.post(f"/api/v1/approvals/{aid}/execute", headers=admin).json()
         assert first["status"] == second["status"] == "executed"
         assert first["provider_reference"] == second["provider_reference"]
-        assert len(sent) == 1 and sent[0]["To"] == "accounts@supplier.example"
+        to_supplier = [m for m in sent if m["To"] == "accounts@supplier.example"]
+        assert len(to_supplier) == 1
+        # The approver was told a letter was waiting; that is the only other email.
+        assert [m["To"] for m in sent if m["To"] != "accounts@supplier.example"] == ["admin_a@test.io"]
     finally:
         email_provider.set_email_provider(None)
 

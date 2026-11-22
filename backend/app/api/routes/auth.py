@@ -26,6 +26,7 @@ from app.core.security import (
 )
 from app.db import get_db, utcnow
 from app.integrations.email.base import EmailMessage
+from app.integrations.email import templates
 from app.integrations.email.provider import get_email_provider
 from app.models.access import PasswordResetToken, SignupVerification
 from app.models.user import User
@@ -126,19 +127,26 @@ def _send_code(email: str, name: str, code: str, idempotency_key: str) -> bool:
             raise ApiError(503, "EMAIL_NOT_CONFIGURED", "Sign-up is unavailable: email sending isn't set up on the server.")
         return False
     first = name.split()[0] if name.split() else "there"
+    minutes = settings.signup_code_ttl_minutes
+    mail = templates.render_notice(
+        title="Confirm your email address",
+        preheader=f"Your verification code is {code}. It expires in {minutes} minutes.",
+        greeting=f"Hi {first},",
+        paragraphs=["Enter this code on the sign-up page to finish creating your OpsWarden account."],
+        code=code,
+        footnote=(
+            f"The code expires in {minutes} minutes and can only be used once. If you didn't try to sign up, "
+            "you can ignore this email; no account has been created. Never share this code with anyone."
+        ),
+        reason=f"This email was sent to {email} because it was used to sign up for OpsWarden.",
+    )
     try:
         provider.send(
             EmailMessage(
                 recipient=email,
                 subject=f"{code} is your OpsWarden verification code",
-                body=(
-                    f"Hi {first},\n\n"
-                    f"Your OpsWarden verification code is:\n\n    {code}\n\n"
-                    f"Enter it on the sign-up page to finish creating your account. It expires in "
-                    f"{settings.signup_code_ttl_minutes} minutes and can only be used once.\n\n"
-                    "If you didn't try to sign up, you can ignore this email. No account has been created.\n\n"
-                    "OpsWarden"
-                ),
+                body=mail.text,
+                html=mail.html,
             ),
             idempotency_key=idempotency_key,
         )
@@ -446,15 +454,26 @@ def request_password_reset(payload: ResetRequest, db: Session = Depends(get_db))
     provider = get_email_provider()
     if provider.configured:
         try:
+            first = (user.full_name or "").split()[0] if (user.full_name or "").split() else "there"
+            minutes = settings.password_reset_ttl_minutes
+            mail = templates.render_notice(
+                title="Reset your password",
+                preheader=f"Set a new OpsWarden password. The link expires in {minutes} minutes.",
+                greeting=f"Hi {first},",
+                paragraphs=["We received a request to reset the password for your OpsWarden account."],
+                button=("Set a new password", url),
+                footnote=(
+                    f"The link expires in {minutes} minutes and works once. If you didn't ask for this, "
+                    "you can ignore this email; your password stays the same."
+                ),
+                reason=f"This email was sent to {user.email} because a password reset was requested.",
+            )
             provider.send(
                 EmailMessage(
                     recipient=user.email,
                     subject="Reset your OpsWarden password",
-                    body=(
-                        f"Use this link to set a new password. It expires in "
-                        f"{settings.password_reset_ttl_minutes} minutes and works once.\n\n{url}\n\n"
-                        "If you didn't ask for this, you can ignore this email."
-                    ),
+                    body=mail.text,
+                    html=mail.html,
                 ),
                 idempotency_key=hash_one_time_token(raw),
             )

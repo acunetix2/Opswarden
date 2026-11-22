@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -29,7 +32,7 @@ from app.schemas.case import (
     ComparisonOut,
 )
 from app.services.comparison_service import match_line_items
-from app.services import audit_service, case_service
+from app.services import audit_service, case_service, recovery_service
 from app.agents import orchestrator
 
 router = APIRouter(tags=["cases"])
@@ -73,6 +76,12 @@ def _to_out(c: Case, db: Session | None = None) -> CaseOut:
         created_at=c.created_at,
         updated_at=c.updated_at,
         resolved_at=c.resolved_at,
+        resolution_outcome=c.resolution_outcome,
+        recovered_amount=(
+            str(Decimal(str(c.recovered_amount)).quantize(Decimal("0.01")))
+            if c.recovered_amount is not None else None
+        ),
+        resolution_note=c.resolution_note,
     )
 
 
@@ -238,6 +247,10 @@ def _run_analysis_job(case_id: str, run_id: str) -> None:
             return
         try:
             orchestrator.run_analysis(db, case, correlation_id=run_id)
+            # Follow-up outside the orchestrator: close clean cases, queue letters, email approvers.
+            from app.services import automation_service
+
+            automation_service.after_analysis(db, case_id, run_id)
         except Exception:
             log.exception("Analysis failed for case %s", case_id)
             db.rollback()
@@ -338,6 +351,10 @@ def reopen_case(
     target = "needs_review" if analyzed else "draft"
     if case.status == "resolved" and target == "draft":
         target = "needs_review"
+    # A reopened case no longer counts towards recovered value.
+    case.resolution_outcome = None
+    case.recovered_amount = None
+    case.resolution_note = None
     case_service.set_status(db, case, target, actor_type="user", actor_id=ctx.user.id)
     audit_service.record_event(
         db,
@@ -354,6 +371,9 @@ def reopen_case(
 
 
 class ResolveRequest(BaseModel):
+    # Older clients send only a comment; they get "no_discrepancy" recorded explicitly.
+    outcome: Literal["recovered", "corrected_invoice", "no_discrepancy", "written_off"] = "no_discrepancy"
+    recovered_amount: str | None = Field(default=None, max_length=32)
     comment: str | None = Field(default=None, max_length=2000)
 
 
@@ -368,6 +388,15 @@ def resolve_case(
     ctx.require(Permission.REVIEW_FINDING)
     if case.status == "resolved" or not case_service.can_transition(case.status, "resolved"):
         raise conflict("INVALID_STATE_TRANSITION", "This case can't be resolved from its current status.")
+    payload = payload or ResolveRequest()
+    try:
+        amount = recovery_service.parse_recovered_amount(payload.outcome, payload.recovered_amount)
+    except recovery_service.InvalidAmount as exc:
+        raise unprocessable("INVALID_AMOUNT", str(exc)) from exc
+    note = (payload.comment or "").strip() or None
+    case.resolution_outcome = payload.outcome
+    case.recovered_amount = amount
+    case.resolution_note = note
     case_service.set_status(db, case, "resolved", actor_type="user", actor_id=ctx.user.id)
     audit_service.record_event(
         db,
@@ -376,7 +405,12 @@ def resolve_case(
         event_type="case.resolved",
         actor_type="user",
         actor_id=ctx.user.id,
-        payload={"comment": payload.comment if payload else None},
+        payload={
+            "comment": note,
+            "outcome": payload.outcome,
+            "recovered_amount": str(amount) if amount is not None else None,
+            "currency": case.currency,
+        },
         commit=False,
     )
     db.commit()

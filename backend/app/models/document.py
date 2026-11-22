@@ -22,5 +22,7 @@ class Document(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     processing_status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The document's own number as read (invoice no, PO no, receipt no), for listing and search.
+    document_number: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
     uploaded_by: Mapped[str] = mapped_column(GUID, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

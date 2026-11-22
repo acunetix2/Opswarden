@@ -40,6 +40,8 @@ class ExtractedField(Base):
     confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     source_page: Mapped[int | None] = mapped_column(nullable=True)
     source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Where the value sits on the page: [ymin, xmin, ymax, xmax], each 0-1000 (from OCR).
+    bbox_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="auto")
     corrected_by: Mapped[str | None] = mapped_column(GUID, nullable=True)
     corrected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

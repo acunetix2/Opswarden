@@ -3,9 +3,12 @@
 Every question goes to the model together with a compact, permission-scoped
 snapshot of the workspace: case register, open findings, waiting approvals,
 and, when the user is on a case page, that case's findings. Document text and
-file contents are never sent. The model can explain and point to pages; it
-cannot act. Links in the reply are built here from real case numbers, so the
-model can't invent a working link.
+file contents are never sent. The model can explain, point to pages and
+propose up to three actions (open a case, run the analysis, prepare the
+supplier letter). It cannot act: proposals are validated here against the
+caller's role and the case status, and the person clicks to run them through
+the normal endpoints. Links in the reply are built here from real case
+numbers, so the model can't invent a working link.
 
 Without a model (or if the call fails) the endpoint returns `reply: null` and
 the widget falls back to its built-in help.
@@ -14,7 +17,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
@@ -27,12 +33,14 @@ from app.agents.llm_provider import LLMError, get_llm_provider
 from app.api.deps import WorkspaceContext, workspace_context
 from app.api.errors import ApiError
 from app.core.logging import get_logger
-from app.core.permissions import Permission
+from app.core.permissions import Permission, role_has_permission
 from app.db import get_db
 from app.models.approval import Approval
+from app.models.audit_event import AuditEvent
 from app.models.case import Case
+from app.models.document import Document
 from app.models.finding import Finding
-from app.services import stt_service, tts_service
+from app.services import case_service, stt_service, tts_service
 
 router = APIRouter(tags=["assistant"])
 log = get_logger("opswarden.assistant")
@@ -105,6 +113,31 @@ SYSTEM_PROMPT = IDENTITY + (
     "the user asks for detail."
 )
 
+# Warden may propose (never perform) a few actions. The server validates each proposal
+# and the person clicks a button to run it through the normal endpoint.
+ACTION_CONTRACT = (
+    " You can suggest up to three next steps the user can confirm with one click. Only when a step "
+    "clearly helps with what they asked, add a line at the very end of your answer in exactly this "
+    "form: ACTION: <type> <CASE-NUMBER>. Types: open_case (open the case page), run_analysis (run the "
+    "three-way match on a case that has documents), draft_letter (prepare the supplier letter for an "
+    "analyzed case). Use only case numbers from WORKSPACE DATA. Never say you performed a step; say "
+    "the user can confirm it below. Don't mention these lines in your answer."
+)
+
+ActionType = Literal["open_case", "run_analysis", "draft_letter"]
+_ACTION_LINE = re.compile(
+    r"^[ \t>*-]*ACTION:\s*(open_case|run_analysis|draft_letter)\s+(OW-\d{4}-\d{3,6})\s*\.?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+# Anything that looks like an action line is removed from the text, valid or not.
+_ANY_ACTION_LINE = re.compile(r"^[ \t>*-]*ACTION:.*$\n?", re.IGNORECASE | re.MULTILINE)
+_MAX_ACTIONS = 3
+_ACTION_LABELS = {
+    "open_case": "Open {n}",
+    "run_analysis": "Run analysis on {n}",
+    "draft_letter": "Prepare supplier letter for {n}",
+}
+
 _PAGE_LINKS = {
     "approvals": ("Approvals", "/app/approvals"),
     "findings": ("Findings", "/app/findings"),
@@ -139,12 +172,30 @@ class ChatLink(BaseModel):
     href: str
 
 
+class ChatAction(BaseModel):
+    """A proposal only. The client runs it through the normal endpoint after a click."""
+    type: ActionType
+    case_id: str
+    case_number: str
+    label: str
+
+
 class ChatResponse(BaseModel):
     reply: str | None
     source: str  # "model" | "builtin"
     reason: str | None = None
     model: str | None = None
     links: list[ChatLink] = Field(default_factory=list)
+    actions: list[ChatAction] = Field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _ModelAnswer:
+    """What gets cached: the cleaned text and the raw proposals. Proposals are
+    validated again on every request, so a cached answer can't outlive a status change."""
+    text: str
+    links: tuple[ChatLink, ...]
+    proposals: tuple[tuple[str, str], ...]
 
 
 class SpeechRequest(BaseModel):
@@ -274,6 +325,57 @@ def _links(reply: str, ids: dict[str, str]) -> list[ChatLink]:
     return links[:6]
 
 
+def _split_actions(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Pull `ACTION: <type> <CASE>` lines out of the model text. Returns (clean text, proposals)."""
+    proposals: list[tuple[str, str]] = []
+    for kind, number in _ACTION_LINE.findall(text):
+        item = (kind.lower(), number.upper())
+        if item not in proposals:
+            proposals.append(item)
+    clean = _ANY_ACTION_LINE.sub("", text).rstrip()
+    return clean, proposals[: _MAX_ACTIONS * 2]
+
+
+def _validate_actions(
+    db: Session, ctx: WorkspaceContext, workspace_id: str, proposals: Iterable[tuple[str, str]]
+) -> list[ChatAction]:
+    """Keep only proposals this user could run on a case in this workspace right now."""
+    out: list[ChatAction] = []
+    for kind, number in proposals:
+        if len(out) >= _MAX_ACTIONS:
+            break
+        case = db.execute(
+            select(Case).where(Case.workspace_id == workspace_id, Case.case_number == number)
+        ).scalar_one_or_none()
+        if case is None:
+            continue  # unknown or another workspace's case: drop silently
+        if kind == "run_analysis":
+            if not role_has_permission(ctx.role, Permission.EDIT_CASE):
+                continue
+            if case.status == "processing" or not case_service.can_transition(case.status, "processing"):
+                continue
+            has_docs = db.execute(select(Document.id).where(Document.case_id == case.id).limit(1)).first()
+            if has_docs is None:
+                continue
+        elif kind == "draft_letter":
+            if not role_has_permission(ctx.role, Permission.GENERATE_RECOMMENDATION):
+                continue
+            if case.status in ("resolved", "archived", "processing", "draft"):
+                continue
+            analyzed = db.execute(
+                select(AuditEvent.id).where(
+                    AuditEvent.case_id == case.id, AuditEvent.event_type == "comparison.completed"
+                ).limit(1)
+            ).first()
+            if analyzed is None:
+                continue
+        out.append(ChatAction(
+            type=kind, case_id=case.id, case_number=case.case_number,
+            label=_ACTION_LABELS[kind].format(n=case.case_number),
+        ))
+    return out
+
+
 @router.post("/workspaces/{workspace_id}/assistant/chat", response_model=ChatResponse)
 def assistant_chat(
     workspace_id: str,
@@ -299,9 +401,9 @@ def assistant_chat(
     )
     mode = "voice" if payload.voice else "text"
     key = llm_guard.key("assistant", mode, provider.name, provider.model, ctx.role, snapshot, transcript, payload.pathname or "", question.lower())
-    system = SYSTEM_PROMPT + (" " + VOICE_STYLE if payload.voice else "")
+    system = SYSTEM_PROMPT + ACTION_CONTRACT + (" " + VOICE_STYLE if payload.voice else "")
 
-    def call() -> ChatResponse:
+    def call() -> _ModelAnswer | ChatResponse:
         try:
             result = provider.complete(system, user)
         except LLMError as exc:
@@ -310,19 +412,28 @@ def assistant_chat(
             return ChatResponse(reply=None, source="builtin", reason="provider_error")
         # The widget shows plain text: drop markdown emphasis/headings and odd spaces models emit.
         text = re.sub(r"\*\*|__|^#+\s*", "", result.text, flags=re.M)
+        text, proposals = _split_actions(text)
         # Warden speaks as OpsWarden's assistant. If the model names its maker anyway, answer for it.
         if _PROVIDER_NAMES.search(text):
-            text = IDENTITY_REPLY
+            text, proposals = IDENTITY_REPLY, []
         text = text.replace("\u202f", " ").replace("\u2011", "-").strip()[:_MAX_REPLY_CHARS]
         if not text:
             return ChatResponse(reply=None, source="builtin", reason="empty")
-        out = ChatResponse(reply=text, source="model", links=_links(text, ids))
-        llm_guard.put(key, out)
-        return out
+        answer = _ModelAnswer(text=text, links=tuple(_links(text, ids)), proposals=tuple(proposals))
+        llm_guard.put(key, answer)
+        return answer
 
     outcome = llm_guard.run(key, call)
-    if outcome.value is not None:
-        return outcome.value
+    value = outcome.value
+    if isinstance(value, _ModelAnswer):
+        return ChatResponse(
+            reply=value.text,
+            source="model",
+            links=list(value.links),
+            actions=_validate_actions(db, ctx, workspace_id, value.proposals),
+        )
+    if isinstance(value, ChatResponse):
+        return value
     return ChatResponse(reply=None, source="builtin", reason=outcome.skipped)
 
 

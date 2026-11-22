@@ -13,6 +13,7 @@ import {
   FileText,
   FolderOpen,
   Home,
+  Inbox,
   Settings,
   TrendingUp,
   Users,
@@ -47,6 +48,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Cases",
     items: [
       { href: "/app/investigations", label: "All cases", icon: FolderOpen, badge: "openCases" },
+      { href: "/app/intake", label: "Drop documents", icon: Inbox, permission: "upload_document" },
       { href: "/app/investigations?status=needs_review", label: "Need review", icon: AlertCircle, badge: "needsReview" },
       { href: "/app/investigations?status=ready_for_approval", label: "Ready to approve", icon: CheckCircle2 },
       { href: "/app/investigations?status=resolved", label: "Resolved", icon: Archive },

@@ -239,6 +239,57 @@
   animation: ow-hero-in 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
+/* Paper behind the hero demo drifts a few pixels, like sheets on a desk in moving air. */
+@keyframes ow-paper-float {
+  50% {
+    translate: 0 -6px;
+  }
+}
+.paper-float {
+  animation: ow-paper-float 7s ease-in-out infinite;
+}
+
+/* Landing agent demo: a soft light passes down the page being read. */
+@keyframes ow-scan-down {
+  from {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(900%);
+    opacity: 0;
+  }
+}
+.ow-scanline {
+  background: linear-gradient(to bottom, transparent, rgb(238 106 36 / 0.22), transparent);
+  animation: ow-scan-down 1100ms linear infinite;
+}
+
+/* Sign-in photo settles once, slowly, on arrival. */
+@keyframes ow-photo-settle {
+  from {
+    transform: scale(1.06);
+  }
+}
+.auth-photo {
+  animation: ow-photo-settle 1800ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Hero underline: drawn once, after the headline has settled. A first-visit flourish. */
+@keyframes ow-draw {
+  from {
+    stroke-dashoffset: 340;
+  }
+}
+.draw-line {
+  stroke-dasharray: 340;
+  stroke-dashoffset: 0;
+  animation: ow-draw 900ms cubic-bezier(0.23, 1, 0.32, 1) 450ms both;
+}
+
 /* Scroll reveal (components/landing/reveal.tsx). Visible unless JS marks it pending. */
 .reveal {
   transition:
@@ -619,6 +670,25 @@ html[data-theme="dark"] dialog::backdrop {
   }
 }
 
+/* Analysis stages: a quarter arc turns while a stage works; a tick settles in when it's done. */
+@keyframes ow-stage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ow-stage-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+.ow-stage-spin {
+  animation: ow-stage-spin 900ms linear infinite;
+}
+.ow-stage-pop {
+  animation: ow-stage-pop 220ms var(--ease-out) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -634,6 +704,11 @@ html[data-theme="dark"] dialog::backdrop {
   .ow-glow,
   .ow-float,
   .ow-halo,
+  .ow-stage-spin,
+  .draw-line,
+  .ow-scanline,
+  .paper-float,
+  .auth-photo,
   .ow-orbit-html {
     animation: none !important;
   }

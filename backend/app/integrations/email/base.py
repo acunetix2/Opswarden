@@ -9,6 +9,10 @@ class EmailMessage:
     recipient: str
     subject: str
     body: str
+    # Optional HTML alternative. `body` stays the plain-text version every client can show.
+    html: str | None = None
+    # Where replies go (the workspace inbox for supplier letters).
+    reply_to: str | None = None
 
 
 @dataclass

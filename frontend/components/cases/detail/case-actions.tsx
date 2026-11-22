@@ -5,9 +5,11 @@ import { useState } from "react";
 
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
-import { Field, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
 import { toAppError } from "@/lib/api-error";
-import type { Case } from "@/lib/types";
+import { OUTCOMES, amountProblem, defaultRecoveredAmount, outcomeRecovers } from "@/lib/recovery";
+import type { Case, Money, ResolutionOutcome } from "@/lib/types";
 import {
   useArchiveCaseMutation,
   useReopenCaseMutation,
@@ -25,10 +27,12 @@ interface CaseActionsProps {
   kase: Case;
   hasDocuments: boolean;
   analyzed: boolean;
+  /** Value in dispute on this case, used to prefill the recovered amount. */
+  exposure?: Money[];
 }
 
 /** Header actions. Every one is re-checked against role and status on the server. */
-export function CaseActions({ kase, hasDocuments, analyzed }: CaseActionsProps) {
+export function CaseActions({ kase, hasDocuments, analyzed, exposure }: CaseActionsProps) {
   const toast = useToast();
   const { can } = useWorkspace();
   const [resolve] = useResolveCaseMutation();
@@ -38,13 +42,23 @@ export function CaseActions({ kase, hasDocuments, analyzed }: CaseActionsProps) 
   const [dialog, setDialog] = useState<Dialog>(null);
   const [text, setText] = useState("");
   const [notes, setNotes] = useState(kase.notes ?? "");
+  const [outcome, setOutcome] = useState<ResolutionOutcome>("no_discrepancy");
+  const [amount, setAmount] = useState("");
 
   const closed = kase.status === "resolved" || kase.status === "archived";
   const busy = kase.status === "processing";
   const lifecycle = can("review_finding"); // admin + reviewer (MANAGE_CASE_LIFECYCLE on the server)
 
+  const recovers = outcomeRecovers(outcome);
+  const amountError = recovers ? amountProblem(amount) : null;
+
   function open(d: Dialog) {
     setText("");
+    if (d === "resolve") {
+      const prefill = defaultRecoveredAmount(exposure, kase.currency);
+      setOutcome(prefill ? "recovered" : "no_discrepancy");
+      setAmount(prefill);
+    }
     setDialog(d);
   }
 
@@ -106,10 +120,49 @@ export function CaseActions({ kase, hasDocuments, analyzed }: CaseActionsProps) 
         title="Mark this case resolved?"
         description="Record how the discrepancy was settled. This closes the case; it doesn't change payments or accounting records."
         confirmLabel="Mark resolved"
+        confirmDisabled={Boolean(amountError)}
         onClose={() => setDialog(null)}
-        onConfirm={() => act(() => resolve({ caseId: kase.id, comment: text.trim() || undefined }).unwrap(), "Case resolved", "Couldn't resolve the case")}
+        onConfirm={() =>
+          act(
+            () =>
+              resolve({
+                caseId: kase.id,
+                outcome,
+                recovered_amount: recovers ? amount.trim() || undefined : undefined,
+                comment: text.trim() || undefined,
+              }).unwrap(),
+            "Case resolved",
+            "Couldn't resolve the case",
+          )
+        }
       >
-        <Field label="Outcome" htmlFor="resolve-comment" hint="e.g. Supplier issued a credit note for 10 units.">
+        <div className="space-y-1.5">
+          <Select
+            label="Outcome"
+            value={outcome}
+            options={OUTCOMES.map((o) => ({ value: o.value, label: o.label }))}
+            onChange={(v) => setOutcome(v as ResolutionOutcome)}
+          />
+          <p className="text-[12px] text-ink-3">{OUTCOMES.find((o) => o.value === outcome)?.hint}</p>
+        </div>
+        {recovers ? (
+          <Field
+            label={`Amount recovered (${kase.currency})`}
+            htmlFor="resolve-amount"
+            hint="Prefilled with the value in dispute. Change it to what the supplier actually credited."
+            error={amountError ?? undefined}
+          >
+            <Input
+              id="resolve-amount"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              aria-invalid={Boolean(amountError)}
+            />
+          </Field>
+        ) : null}
+        <Field label="Note" htmlFor="resolve-comment" hint="Optional. For example: supplier issued a credit note for 10 units.">
           <Textarea id="resolve-comment" value={text} onChange={(e) => setText(e.target.value)} rows={3} />
         </Field>
       </ConfirmDialog>

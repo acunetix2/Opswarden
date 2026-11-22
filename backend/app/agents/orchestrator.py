@@ -23,12 +23,14 @@ from app.models.document import Document
 from app.models.extraction import ExtractedField, ExtractionRun
 from app.models.finding import Finding as FindingModel
 from app.models.finding import FindingEvidence
-from app.services import audit_service, case_service
+from app.services import audit_service, case_service, register_service
 from app.services.comparison_service import (
     ComparisonConfig,
     DocumentRef,
+    PricePoint,
     run_comparison,
 )
+from app.services.normalization import parse_decimal
 from app.services.doc_schema import StructuredDocument
 from app.services.extraction_service import ExtractionError, extract_document
 from app.integrations.storage.provider import get_storage
@@ -36,6 +38,7 @@ from app.integrations.storage.provider import get_storage
 log = get_logger("opswarden.orchestrator")
 
 MAX_DOCUMENTS = 12
+MATCHED_TYPES = ("purchase_order", "invoice", "delivery_receipt")
 
 
 def _rebuild_structured(db: Session, document: Document) -> StructuredDocument:
@@ -60,6 +63,16 @@ def _rebuild_structured(db: Session, document: Document) -> StructuredDocument:
     items = [data["line_items"][k] for k in sorted(data["line_items"].keys())]
     data["line_items"] = items
     return StructuredDocument.model_validate(data)
+
+
+def _learn(db: Session, document: Document, structured: StructuredDocument) -> None:
+    """Save suppliers, POs and the document number to the register. A failure here is logged
+    and rolled back to a savepoint; it never stops the analysis."""
+    try:
+        with db.begin_nested():
+            register_service.learn_from_document(db, document, structured)
+    except Exception as exc:  # type only: the message can carry SQL parameters with document values
+        log.error("Register update skipped for document %s (%s)", document.id, type(exc).__name__)
 
 
 def run_extraction(db: Session, document: Document, correlation_id: str) -> ExtractionRun:
@@ -102,6 +115,7 @@ def run_extraction(db: Session, document: Document, correlation_id: str) -> Extr
                 db.delete(f)
 
         _persist_fields(db, document, structured, confidence, skip=corrected)
+        _learn(db, document, structured)
 
         run.status = "completed"
         run.completed_at = utcnow()
@@ -146,6 +160,53 @@ def run_extraction(db: Session, document: Document, correlation_id: str) -> Extr
     return run
 
 
+def record_extraction(
+    db: Session,
+    document: Document,
+    structured: StructuredDocument,
+    confidence: dict[str, float],
+    provider: str,
+    model: str,
+    correlation_id: str,
+) -> ExtractionRun:
+    """Store fields for a document that was already read (smart intake), so the
+    analysis doesn't read it again. Same fields, run record and audit as run_extraction.
+    The caller commits."""
+    now = utcnow()
+    run = ExtractionRun(
+        workspace_id=document.workspace_id,
+        case_id=document.case_id,
+        document_id=document.id,
+        status="completed",
+        provider=provider,
+        model=model[:64],
+        started_at=now,
+        completed_at=now,
+    )
+    db.add(run)
+    _persist_fields(db, document, structured, confidence, skip=set())
+    _learn(db, document, structured)
+    document.processing_status = "extracted"
+    document.error_code = None
+    db.add(document)
+    audit_service.record_event(
+        db,
+        workspace_id=document.workspace_id,
+        case_id=document.case_id,
+        event_type="document.extraction.completed",
+        actor_type="system",
+        payload={
+            "document_id": document.id,
+            "fields": len(structured.line_items),
+            "method": "ocr" if provider != "builtin" else "text",
+            "model": model,
+        },
+        correlation_id=correlation_id,
+        commit=False,
+    )
+    return run
+
+
 def _persist_fields(
     db: Session,
     document: Document,
@@ -166,12 +227,17 @@ def _persist_fields(
                 value_json=json.dumps(value),
                 confidence=conf,
                 review_status=review,
+                source_page=(structured.boxes.get(path) or {}).get("page"),
+                bbox_json=json.dumps(structured.boxes[path]["box"]) if path in structured.boxes else None,
             )
         )
 
     for name in (
         "supplier_name",
         "supplier_reference",
+        "supplier_email",
+        "supplier_phone",
+        "supplier_address",
         "document_number",
         "document_date",
         "purchase_order_reference",
@@ -203,7 +269,9 @@ def run_analysis(db: Session, case: Case, correlation_id: str | None = None) -> 
     # A re-uploaded document supersedes earlier uploads of the same type.
     latest: dict[str, Document] = {}
     for d in all_documents:
-        latest[d.document_type] = d
+        # Credit notes from supplier replies are kept on the case but aren't part of the match.
+        if d.document_type in MATCHED_TYPES:
+            latest[d.document_type] = d
     documents = list(latest.values())
 
     audit_service.record_event(
@@ -257,6 +325,7 @@ def run_analysis(db: Session, case: Case, correlation_id: str | None = None) -> 
         by_type.get("delivery_receipt"),
         config,
         existing_invoice_numbers=existing_invoice_numbers,
+        price_history=_price_history(db, case),
     )
 
     _persist_findings(db, case, findings)
@@ -289,6 +358,61 @@ def run_analysis(db: Session, case: Case, correlation_id: str | None = None) -> 
     )
     db.commit()
     return correlation_id
+
+
+_HISTORY_DOCS = 200
+
+
+def _price_history(db: Session, case: Case) -> dict[str, PricePoint]:
+    """Most recent earlier unit price per item (by SKU) from this supplier's other cases
+    in the same workspace: purchase orders and invoices that were read."""
+    from app.services.normalization import normalize_sku, normalize_text
+
+    name = normalize_text(case.supplier_name)
+    rows = db.execute(
+        select(Document, Case.case_number, Case.supplier_name, Case.supplier_id)
+        .join(Case, Case.id == Document.case_id)
+        .where(
+            Document.workspace_id == case.workspace_id,
+            Document.case_id != case.id,
+            Document.document_type.in_(("purchase_order", "invoice")),
+            Document.processing_status == "extracted",
+        )
+        .order_by(Document.created_at.desc())
+        .limit(_HISTORY_DOCS * 3)
+    ).all()
+    docs = [
+        (d, number) for d, number, sup_name, sup_id in rows
+        if (case.supplier_id and sup_id == case.supplier_id) or (name and normalize_text(sup_name) == name)
+    ][:_HISTORY_DOCS]
+    if not docs:
+        return {}
+    fields = db.execute(
+        select(ExtractedField).where(ExtractedField.document_id.in_([d.id for d, _ in docs]))
+    ).scalars().all()
+    by_doc: dict[str, dict[str, str]] = {}
+    for f in fields:
+        try:
+            value = json.loads(f.value_json)
+        except json.JSONDecodeError:
+            value = f.value_json
+        by_doc.setdefault(f.document_id, {})[f.field_path] = "" if value is None else str(value)
+
+    history: dict[str, PricePoint] = {}
+    for d, number in docs:  # newest first: the first price seen per SKU wins
+        values = by_doc.get(d.id, {})
+        when = (values.get("document_date") or "")[:10] or (d.created_at.date().isoformat() if d.created_at else "")
+        i = 0
+        while f"line_items[{i}].sku" in values or f"line_items[{i}].unit_price" in values:
+            key = normalize_sku(values.get(f"line_items[{i}].sku"))
+            price = parse_decimal(values.get(f"line_items[{i}].unit_price"))
+            if key and price is not None and key not in history:
+                history[key] = PricePoint(
+                    price=price, document_id=d.id, document_type=d.document_type,
+                    field_path=f"line_items[{i}].unit_price", case_number=number, when=when,
+                )
+            i += 1
+    return history
 
 
 def _existing_invoice_numbers(db: Session, case: Case) -> set[str]:

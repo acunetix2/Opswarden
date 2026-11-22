@@ -14,8 +14,10 @@ import { placePanel } from "@/lib/panel-placement";
 import { useDraggableDock } from "@/lib/use-draggable-dock";
 import { openMicrophone, recordTurn, speak, transcribe, voiceSupported } from "@/lib/voice";
 import { formatMoneyValue } from "@/lib/format";
+import type { WardenAction } from "@/lib/types";
 import {
   useAllFindingsQuery,
+  useAnalyzeMutation,
   useApprovalsQuery,
   useAssistantChatMutation,
   useCasesQuery,
@@ -31,6 +33,8 @@ interface Message {
   from: "user" | "warden";
   text: string;
   links?: AssistantLink[];
+  /** Proposals only; each runs when the person clicks it. */
+  actions?: WardenAction[];
   suggestions?: string[];
   ai?: boolean;
   /** The user said this out loud. */
@@ -54,6 +58,10 @@ const GREETING: Omit<Message, "id"> = {
 };
 
 let nextId = 1;
+
+function actionKey(messageId: number, a: WardenAction) {
+  return `${messageId}:${a.type}:${a.case_id}`;
+}
 /** Launcher button size in px (48px icon + padding + border). */
 const LAUNCHER_SIZE = 62;
 
@@ -114,6 +122,10 @@ export function Assistant() {
   const approvals = useApprovalsQuery({ workspaceId: workspace.id }, { skip: !open });
   const { data: settings } = useSettingsQuery(workspace.id, { skip: !open });
   const [askModel] = useAssistantChatMutation();
+  const [analyze] = useAnalyzeMutation();
+  // Proposed actions already used, keyed by message id + action, so each runs at most once.
+  const [usedActions, setUsedActions] = useState<Set<string>>(() => new Set());
+  const [runningAction, setRunningAction] = useState<string | null>(null);
   const aiOn = Boolean(settings?.llm_configured);
   const ttsOn = Boolean(settings?.tts_available);
   const token = useAppSelector((s) => s.session.token);
@@ -161,6 +173,29 @@ export function Assistant() {
 
   function push(m: Omit<Message, "id">) {
     setMessages((prev) => [...prev, { ...m, id: nextId++ }]);
+  }
+
+  /** Runs a proposal Warden made, only because the person clicked it. The server re-checks everything. */
+  async function runAction(messageId: number, a: WardenAction) {
+    const key = actionKey(messageId, a);
+    if (usedActions.has(key) || runningAction) return;
+    setRunningAction(key);
+    try {
+      if (a.type === "run_analysis") {
+        await analyze(a.case_id).unwrap();
+        push({ from: "warden", text: `Analysis started on ${a.case_number}. I've opened the case so you can follow progress.` });
+        router.push(`/app/investigations/${a.case_id}`);
+      } else if (a.type === "draft_letter") {
+        router.push(`/app/investigations/${a.case_id}/email`);
+      } else {
+        router.push(`/app/investigations/${a.case_id}`);
+      }
+      setUsedActions((prev) => new Set(prev).add(key));
+    } catch (err) {
+      push({ from: "warden", text: `That didn't work: ${toAppError(err).message}` });
+    } finally {
+      setRunningAction(null);
+    }
   }
 
   /** Sends a message and returns Warden's reply text (used by voice mode to read it aloud). */
@@ -219,7 +254,7 @@ export function Assistant() {
           voice: opts.voice,
         }).unwrap();
         if (res.reply) {
-          push({ from: "warden", text: res.reply, ai: true, links: res.links });
+          push({ from: "warden", text: res.reply, ai: true, links: res.links, actions: res.actions });
           return finish(res.reply);
         }
       } catch {
@@ -406,6 +441,29 @@ export function Assistant() {
                           <ArrowUpRight className="size-3.5 shrink-0" aria-hidden />
                         </Link>
                       ))}
+                    </div>
+                  ) : null}
+                  {m.actions?.length ? (
+                    <div className="space-y-1.5" role="group" aria-label="Suggested next steps">
+                      <p className="text-[11.5px] text-ink-3">Suggested next steps. Nothing runs until you choose one.</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {m.actions.map((a) => {
+                          const key = actionKey(m.id, a);
+                          const used = usedActions.has(key);
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => runAction(m.id, a)}
+                              disabled={used || Boolean(runningAction)}
+                              aria-busy={runningAction === key}
+                              className="pressable inline-flex max-w-full items-center gap-1 rounded-full bg-ink px-3 py-1 text-[12.5px] font-medium text-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <span className="truncate">{runningAction === key ? "Working…" : used ? `${a.label} (done)` : a.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : null}
                 </div>

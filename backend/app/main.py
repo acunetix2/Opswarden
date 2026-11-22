@@ -1,6 +1,7 @@
 """OpsWarden FastAPI application entrypoint."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api.errors import ApiError
-from app.api.routes import activity, approvals, assistant, auth, cases, documents, events, findings, registry, team, workspaces
+from app.api.routes import activity, approvals, assistant, auth, cases, documents, events, findings, inbound, intake, registry, team, workspaces
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.db import init_db
@@ -35,8 +36,32 @@ async def lifespan(app: FastAPI):
 
         seed()
         log.info("Demo seed data ensured")
-    log.info("OpsWarden backend started (env=%s)", settings.opswarden_env)
+    log.info("OpsWarden backend started (env=%s, storage=%s)", settings.opswarden_env, (settings.storage_backend or "local").lower())
+    # Reminders while the server is awake; the Email Worker's hourly cron also calls /automation/run.
+    task = asyncio.create_task(_follow_up_loop()) if settings.opswarden_env != "test" else None
     yield
+    if task:
+        task.cancel()
+
+
+async def _follow_up_loop() -> None:
+    from fastapi.concurrency import run_in_threadpool
+
+    from app.db import SessionLocal
+    from app.services import followup_service
+
+    def once() -> None:
+        db = SessionLocal()
+        try:
+            followup_service.run_due(db)
+        except Exception as exc:  # the loop must survive any single failure
+            log.error("Follow-up run failed (%s)", type(exc).__name__)
+        finally:
+            db.close()
+
+    while True:
+        await asyncio.sleep(3600)
+        await run_in_threadpool(once)
 
 
 app = FastAPI(
@@ -135,3 +160,5 @@ app.include_router(team.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(assistant.router, prefix=API_PREFIX)
 app.include_router(registry.router, prefix=API_PREFIX)
+app.include_router(intake.router, prefix=API_PREFIX)
+app.include_router(inbound.router, prefix=API_PREFIX)

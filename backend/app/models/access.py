@@ -50,6 +50,15 @@ class WorkspacePolicy(Base):
     price_tolerance: Mapped[str] = mapped_column(String(32), nullable=False)
     quantity_tolerance: Mapped[str] = mapped_column(String(32), nullable=False)
     reviewers_can_approve: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Automation switches. NULL means the default (on); stored nullable so the migration stays additive.
+    auto_register: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    auto_draft_letters: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    auto_resolve_clean: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    notify_reviewers: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    send_on_approval: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    follow_up_reminders: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    record_credit_notes: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    follow_up_days: Mapped[int | None] = mapped_column(nullable=True)
     updated_by: Mapped[str | None] = mapped_column(GUID, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

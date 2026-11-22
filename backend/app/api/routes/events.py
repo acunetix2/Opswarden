@@ -39,8 +39,12 @@ STREAMED = {
     "action.executed",
     "action.failed",
     "case.status_changed",
+    "register.supplier_added",
+    "register.supplier_updated",
+    "register.purchase_order_added",
+    "automation.completed",
 }
-_SAFE_KEYS = ("document_id", "document_type", "error_code", "finding_count", "status", "decision", "from", "to")
+_SAFE_KEYS = ("document_id", "document_type", "error_code", "finding_count", "status", "decision", "from", "to", "actions", "name", "po_number")
 
 
 def _utc(dt: datetime) -> datetime:

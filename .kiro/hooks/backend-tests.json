@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run backend tests after a Python change",
+      "trigger": "PostFileSave",
+      "matcher": "backend/.*\\.py$",
+      "action": {
+        "type": "command",
+        "command": "backend/.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider backend/tests -x --show-capture=no -W ignore"
+      },
+      "timeout": 600
+    }
+  ]
+}

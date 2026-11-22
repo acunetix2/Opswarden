@@ -30,6 +30,10 @@ class StructuredDocument(BaseModel):
     document_type: DocumentType
     supplier_name: str | None = None
     supplier_reference: str | None = None
+    # The supplier's own contact details as printed (never the buyer's).
+    supplier_email: str | None = None
+    supplier_phone: str | None = None
+    supplier_address: str | None = None
     document_number: str | None = None
     document_date: str | None = None
     purchase_order_reference: str | None = None
@@ -39,3 +43,6 @@ class StructuredDocument(BaseModel):
     grand_total: str | None = None
     delivery_date: str | None = None
     line_items: list[LineItem] = Field(default_factory=list)
+    # Where each value sits on the page, from OCR: field path -> {"page": 1, "box": [ymin, xmin, ymax, xmax]}
+    # on a 0-1000 grid. Not part of the stored fields themselves (exclude=True).
+    boxes: dict[str, dict] = Field(default_factory=dict, exclude=True)

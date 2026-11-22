@@ -1,13 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
+  Boxes,
   Building2,
   CircleHelp,
+  Factory,
   FileText,
   Mail,
   Newspaper,
   Scale,
   ShieldCheck,
+  Users,
+  Workflow,
 } from "lucide-react";
 
 export interface MenuLink {
@@ -19,17 +23,22 @@ export interface MenuLink {
 
 export type NavEntry = { label: string; href: string } | { label: string; items: MenuLink[] };
 
-/** Top navigation: seven tabs, the last two open a menu. */
+/** Top navigation: four one-word entries. Product, Resources and Company open a menu. */
 export const MAIN_NAV: NavEntry[] = [
-  { label: "Product", href: "/product" },
-  { label: "How it works", href: "/how-it-works" },
-  { label: "Use cases", href: "/use-cases" },
+  {
+    label: "Product",
+    items: [
+      { href: "/product", label: "Overview", description: "What OpsWarden checks and what it does on its own", Icon: Boxes },
+      { href: "/how-it-works", label: "How it works", description: "From three documents to an approved letter", Icon: Workflow },
+      { href: "/use-cases", label: "Use cases", description: "Accounts payable, procurement, controllers, audit", Icon: Users },
+      { href: "/industries", label: "Industries", description: "Where three-way matching matters most", Icon: Factory },
+    ],
+  },
   { label: "Security", href: "/security" },
-  { label: "Industries", href: "/industries" },
   {
     label: "Resources",
     items: [
-      { href: "/resources", label: "Help center", description: "Guides for every step of a case", Icon: BookOpen },
+      { href: "/resources", label: "Help", description: "Guides for every step of a case", Icon: BookOpen },
       { href: "/resources#faq", label: "FAQ", description: "Answers to the questions people ask first", Icon: CircleHelp },
       { href: "/resources#glossary", label: "Glossary", description: "Three-way match, tolerance, exposure and more", Icon: Newspaper },
     ],

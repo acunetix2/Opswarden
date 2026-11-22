@@ -33,6 +33,8 @@ interface ApprovalCardProps {
   canDecide: boolean;
   canExecute: boolean;
   emailConfigured: boolean;
+  /** Workspace setting: approving sends the letter straight away. */
+  sendOnApproval?: boolean;
 }
 
 type Dialog = null | "approve" | "reject" | "execute";
@@ -103,7 +105,10 @@ function Chain({ steps }: { steps: Step[] }) {
 }
 
 /** One approval request: who, what, how much, where it is in the chain, and the decision buttons. */
-export function ApprovalCard({ approval: a, context, canDecide, canExecute, emailConfigured }: ApprovalCardProps) {
+export function ApprovalCard({ approval: a, context, canDecide, canExecute, emailConfigured, sendOnApproval = true }: ApprovalCardProps) {
+  // Approving sends at once when email works, the letter has an address and this person may send.
+  const sendsOnApprove = sendOnApproval && emailConfigured && canExecute && Boolean(a.recipient);
+  const unconfirmedAddress = a.recipient_source === "document";
   const toast = useToast();
   const [decide] = useDecideApprovalMutation();
   const [execute] = useExecuteApprovalMutation();
@@ -118,8 +123,15 @@ export function ApprovalCard({ approval: a, context, canDecide, canExecute, emai
 
   async function onDecide(decision: "approve" | "reject") {
     try {
-      await decide({ approvalId: a.id, decision, comment: comment.trim() || undefined }).unwrap();
-      toast("success", decision === "approve" ? "Letter approved" : "Letter rejected", decision === "approve" ? "It's ready to send under Signed." : undefined);
+      const res = await decide({ approvalId: a.id, decision, comment: comment.trim() || undefined }).unwrap();
+      if (decision === "reject") toast("success", "Letter rejected");
+      else if (res.status === "executed") toast("success", "Approved and sent", `Emailed to ${res.recipient ?? "the supplier"}.`);
+      else
+        toast(
+          "success",
+          "Letter approved",
+          sendsOnApprove ? "It couldn't be sent just now. Press Send letter to try again." : "It's ready to send under Signed.",
+        );
       setDialog(null);
       setComment("");
     } catch (err) {
@@ -207,7 +219,20 @@ export function ApprovalCard({ approval: a, context, canDecide, canExecute, emai
           </div>
           <dl className="mt-2 grid grid-cols-[3.5rem_1fr] gap-y-1 text-[12.5px]">
             <dt className="text-ink-3">To</dt>
-            <dd className={a.recipient ? "truncate font-mono text-ink" : "text-warning"}>{a.recipient ?? "Not set: add an address or export the letter"}</dd>
+            <dd className={a.recipient ? "min-w-0 text-ink" : "text-warning"}>
+              {a.recipient ? (
+                <>
+                  <span className="block truncate font-mono">{a.recipient}</span>
+                  {unconfirmedAddress && pending ? (
+                    <span className="block text-[12px] text-warning">
+                      Read from a supplier document. Check it is the supplier&apos;s accounts address before approving.
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                "Not set: add an address or export the letter"
+              )}
+            </dd>
             <dt className="text-ink-3">Subject</dt>
             <dd className="truncate text-ink">{a.subject}</dd>
           </dl>
@@ -274,8 +299,12 @@ export function ApprovalCard({ approval: a, context, canDecide, canExecute, emai
       <footer className="mt-4 flex flex-wrap items-center gap-2 rounded-b-[12px] border-t border-line bg-canvas/60 px-5 py-3">
         {pending && canDecide ? (
           <>
-            <Button variant="success" onClick={() => setDialog("approve")} icon={<Check className="size-4" aria-hidden />}>
-              Approve
+            <Button
+              variant="success"
+              onClick={() => setDialog("approve")}
+              icon={sendsOnApprove ? <Send className="size-4" aria-hidden /> : <Check className="size-4" aria-hidden />}
+            >
+              {sendsOnApprove ? "Approve and send" : "Approve"}
             </Button>
             <Button variant="danger" onClick={() => setDialog("reject")} icon={<X className="size-4" aria-hidden />}>
               Reject
@@ -310,10 +339,12 @@ export function ApprovalCard({ approval: a, context, canDecide, canExecute, emai
         title={dialog === "approve" ? "Approve this letter?" : "Reject this letter?"}
         description={
           dialog === "approve"
-            ? "You confirm you've read the letter and the evidence behind it. Approving doesn't send anything yet."
+            ? sendsOnApprove
+              ? `You confirm you've read the letter and the evidence behind it. Approving emails it to ${a.recipient} straight away.`
+              : "You confirm you've read the letter and the evidence behind it. Approving doesn't send anything yet."
             : "The letter won't be sent. A new draft can be prepared from the case."
         }
-        confirmLabel={dialog === "approve" ? "Approve" : "Reject"}
+        confirmLabel={dialog === "approve" ? (sendsOnApprove ? "Approve and send" : "Approve") : "Reject"}
         confirmVariant={dialog === "approve" ? "success" : "danger"}
         onClose={() => setDialog(null)}
         onConfirm={() => onDecide(dialog === "approve" ? "approve" : "reject")}

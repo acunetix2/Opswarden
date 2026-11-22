@@ -47,6 +47,9 @@ import type {
   WorkspaceFinding,
   WorkspaceSettings,
   WorkspaceSettingsUpdate,
+  ResolutionOutcome,
+  WardenAction,
+  IntakeResult,
 } from "@/lib/types";
 
 import { refreshSession, usesSupabaseAuth } from "@/lib/supabase-auth";
@@ -98,6 +101,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, AppError> = async (arg
 };
 
 type CaseScoped = { caseId: string };
+type WorkspaceScoped = { workspaceId: string };
 
 export const opswardenApi = createApi({
   reducerPath: "api",
@@ -309,8 +313,15 @@ export const opswardenApi = createApi({
         "Activity",
       ],
     }),
-    resolveCase: build.mutation<Case, CaseScoped & { comment?: string }>({
-      query: ({ caseId, comment }) => ({ url: `/cases/${caseId}/resolve`, method: "POST", body: { comment } }),
+    resolveCase: build.mutation<
+      Case,
+      CaseScoped & { outcome: ResolutionOutcome; recovered_amount?: string; comment?: string }
+    >({
+      query: ({ caseId, outcome, recovered_amount, comment }) => ({
+        url: `/cases/${caseId}/resolve`,
+        method: "POST",
+        body: { outcome, recovered_amount, comment },
+      }),
       invalidatesTags: (_r, _e, { caseId }) => [
         { type: "Case", id: caseId },
         { type: "CaseData", id: caseId },
@@ -337,6 +348,22 @@ export const opswardenApi = createApi({
     workspaceDocuments: build.query<WorkspaceDocument[], string>({
       query: (workspaceId) => `/workspaces/${workspaceId}/documents`,
       providesTags: ["WorkspaceDocuments"],
+    }),
+    intakeDocument: build.mutation<IntakeResult, WorkspaceScoped & { documentType: DocumentType; file: File }>({
+      query: ({ workspaceId, documentType, file }) => {
+        const form = new FormData();
+        form.set("document_type", documentType);
+        form.set("file", file);
+        return { url: `/workspaces/${workspaceId}/intake`, method: "POST", body: form };
+      },
+      invalidatesTags: (r) => [
+        "CaseList",
+        "Overview",
+        "WorkspaceDocuments",
+        "Activity",
+        "Suppliers",
+        ...(r ? [{ type: "Case" as const, id: r.case_id }, { type: "CaseDocuments" as const, id: r.case_id }, { type: "CaseData" as const, id: r.case_id }] : []),
+      ],
     }),
     uploadDocument: build.mutation<
       { document_id: string; processing_status: string; filename: string },
@@ -404,7 +431,8 @@ export const opswardenApi = createApi({
     // ---- Recommendations & approvals -------------------------------------------
     emailDraft: build.mutation<EmailDraft, string>({
       query: (caseId) => ({ url: `/cases/${caseId}/recommendations/email-draft`, method: "POST" }),
-      invalidatesTags: ["Activity"],
+      // Drafting can link the case to its registered supplier, which changes the case.
+      invalidatesTags: (_r, _e, caseId) => ["Activity", { type: "Case", id: caseId }],
     }),
     requestApproval: build.mutation<
       { approval_id: string; status: string; payload_hash: string },
@@ -430,7 +458,8 @@ export const opswardenApi = createApi({
         method: "POST",
         body: { decision, comment },
       }),
-      invalidatesTags: ["Approvals", "Overview", "Activity"],
+      // Approving can send the letter and close the case.
+      invalidatesTags: (r) => ["Approvals", "Overview", "Activity", "CaseList", ...(r ? [{ type: "Case" as const, id: r.case_id }] : [])],
     }),
     executeApproval: build.mutation<ExecuteResult, { approvalId: string; caseId: string }>({
       query: ({ approvalId }) => ({ url: `/approvals/${approvalId}/execute`, method: "POST" }),
@@ -462,6 +491,7 @@ export const opswardenApi = createApi({
         reason?: string | null;
         model?: string | null;
         links?: { label: string; href: string }[];
+        actions?: WardenAction[];
       },
       {
         workspaceId: string;
@@ -527,6 +557,7 @@ export const {
   useCaseDocumentsQuery,
   useWorkspaceDocumentsQuery,
   useUploadDocumentMutation,
+  useIntakeDocumentMutation,
   useDeleteDocumentMutation,
   useGetDocumentQuery,
   useExtractedFieldsQuery,

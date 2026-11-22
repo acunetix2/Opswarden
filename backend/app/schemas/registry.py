@@ -121,3 +121,30 @@ class SearchHit(BaseModel):
 class SearchOut(BaseModel):
     query: str
     hits: list[SearchHit]
+
+
+class ScorecardCase(BaseModel):
+    id: str
+    case_number: str
+    status: str
+    outcome: str | None = None
+    issues: list[str] = []
+    updated_at: datetime
+
+
+class SupplierScorecardOut(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    cases: int
+    analyzed: int
+    with_issues: int
+    short_shipments: int
+    overbilling: int
+    issue_rate: str | None = None  # percent, decimal string
+    open_exposure: list[MoneyAmount] = []
+    recovered: list[MoneyAmount] = []
+    letters_sent: int = 0
+    replies: int = 0
+    average_reply_days: str | None = None
+    rule_counts: dict[str, int] = {}
+    recent_cases: list[ScorecardCase] = []

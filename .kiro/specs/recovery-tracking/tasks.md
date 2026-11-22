@@ -1,0 +1,11 @@
+# Tasks: Recovery tracking
+- [x] 1. Add the three nullable columns to `Case` and expose them in `CaseOut`
+  - _Requirements: 1.4, 3.2_
+- [x] 2. Extend `resolve` with outcome and amount validation; clear on `reopen`
+  - _Requirements: 1.1–1.4, 2.1_
+  - Amount parsing lives in `services/recovery_service.py`. Typed amounts are checked strictly, because `parse_decimal` strips letters ("1e40" would otherwise become 140).
+- [x] 3. Add `recovered_in_period` and `recovered_total` to the overview
+  - _Requirements: 3.1_
+- [x] 4. Tests in `backend/tests/test_recovery.py` (outcomes, invalid amount, reopen, per-currency totals, two property tests)
+- [x] 5. Frontend: outcome picker in the resolve dialog, "Recovered" on the dashboard, outcome on resolved cases (`lib/recovery.ts`, `tests/recovery.test.ts`)
+- [x] 6. Apply the schema change to Supabase with `scripts/migrate.py --apply`

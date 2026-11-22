@@ -34,6 +34,9 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
   const [requestApproval, reqState] = useRequestApprovalMutation();
 
   const recipient = draft?.recipient.trim() ?? "";
+  // The address is the one filled from the register, untouched.
+  const fromRegister = Boolean(recipient) && draft?.recipientSource === "register";
+  const fromDocument = Boolean(recipient) && draft?.recipientSource === "document";
   const recipientInvalid = recipient !== "" && !EMAIL_RE.test(recipient);
   const locked = Boolean(draft?.submittedApprovalId);
   const closed = kase.status === "resolved" || kase.status === "archived";
@@ -48,8 +51,10 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
           subject: d.subject,
           body: d.body,
           recipient: d.recipient,
-          // An address from the supplier register was entered and checked by a person already.
-          recipientVerified: Boolean(d.recipient && d.recipient === kase.supplier_contact_email),
+          // Filled from the supplier register. An address a person entered there is already trusted;
+          // one OpsWarden read from a supplier document needs the person to confirm it.
+          recipientVerified: Boolean(d.recipient) && d.recipient_source !== "document",
+          recipientSource: d.recipient ? (d.recipient_source ?? "register") : null,
           aiModel: d.ai_assisted ? d.model : null,
         }),
       );
@@ -187,11 +192,15 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
             <p id="email-recipient-hint" className={recipientInvalid ? "text-[12px] text-danger" : "text-[12px] text-ink-3"}>
               {recipientInvalid
                 ? "Enter a valid email address."
-                : recipient && recipient === kase.supplier_contact_email
-                  ? `From the supplier register for ${kase.supplier_name ?? "this supplier"}.`
-                  : "OpsWarden never guesses supplier addresses. Leave it blank to export, or enter one you've confirmed."}
+                : fromRegister
+                  ? `Filled in from the supplier register for ${kase.supplier_name ?? "this supplier"}.`
+                  : fromDocument
+                    ? `Filled in from a ${kase.supplier_name ?? "supplier"} document OpsWarden read. Check it is the supplier's accounts address before sending.`
+                    : recipient
+                      ? "Confirm this address belongs to the supplier."
+                      : "No address in the supplier register yet. Add one under Suppliers, enter one you've confirmed, or leave it blank to export the letter."}
             </p>
-            {recipient && !recipientInvalid && !locked && recipient !== kase.supplier_contact_email ? (
+            {recipient && !recipientInvalid && !locked && !fromRegister ? (
               <Checkbox
                 checked={draft.recipientVerified}
                 onChange={(v) => dispatch(draftEdited({ caseId: kase.id, changes: { recipientVerified: v } }))}
@@ -215,7 +224,7 @@ export function EmailComposer({ kase, analyzed, approvals, emailConfigured, canD
                     !draft.subject.trim() ||
                     !draft.body.trim() ||
                     recipientInvalid ||
-                    (Boolean(recipient) && recipient !== kase.supplier_contact_email && !draft.recipientVerified)
+                    (Boolean(recipient) && !fromRegister && !draft.recipientVerified)
                   }
                 >
                   Request approval

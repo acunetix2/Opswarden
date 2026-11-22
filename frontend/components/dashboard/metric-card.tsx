@@ -49,7 +49,7 @@ export function MetricCell({ label, value, detail, href, attention }: MetricCell
 
 /** Row of separate metric cards with even gaps. */
 export function MetricStrip({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{children}</div>;
 }
 
 export function MetricCellSkeleton() {

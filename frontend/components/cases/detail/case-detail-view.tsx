@@ -13,6 +13,8 @@ import { Notice } from "@/components/ui/notice";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { DOCUMENT_TYPES, latestByType } from "@/lib/documents";
 import { sortFindings } from "@/lib/findings";
+import { formatMoney } from "@/lib/format";
+import { outcomeLabel } from "@/lib/recovery";
 import {
   useApprovalsQuery,
   useCaseDocumentsQuery,
@@ -33,7 +35,7 @@ import { ComparisonTable } from "./comparison-table";
 import { DiscrepancyCard } from "./discrepancy-card";
 import { EmailComposer } from "./email-composer";
 import { ExecutiveSummary } from "./executive-summary";
-import { ProcessingState } from "./processing-state";
+import { AnalysisStages } from "./analysis-stages";
 import { SourceDocuments } from "./source-documents";
 
 /** Replay stream events from just before the case entered processing. */
@@ -70,7 +72,15 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
     }
     wasAnalyzing.current = analyzing;
   }, [analyzing, caseId, dispatch]);
-  const stream = useCaseEvents(caseId, analyzing, useMemo(() => streamSince(caseQ.data?.updated_at), [caseQ.data?.updated_at]));
+  // One run = from the moment the case enters processing until the follow-up step reports.
+  // The replay time is frozen per run so status changes mid-run don't restart the stream.
+  const [runSince, setRunSince] = useState<string | null>(null);
+  const runStarted = useRef(false);
+  useEffect(() => {
+    if (analyzing && !runStarted.current) setRunSince(streamSince(caseQ.data?.updated_at) ?? new Date().toISOString());
+    runStarted.current = analyzing;
+  }, [analyzing, caseQ.data?.updated_at]);
+  const stream = useCaseEvents(caseId, runSince !== null, runSince ?? undefined);
   const docsQ = useCaseDocumentsQuery(caseId);
   const summaryQ = useSummaryQuery(caseId);
   const findingsQ = useFindingsQuery(caseId);
@@ -107,7 +117,14 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
     <div className="space-y-6">
       <CaseHeader
         kase={kase}
-        actions={<CaseActions kase={kase} hasDocuments={Boolean(documents?.length)} analyzed={analyzed} />}
+        actions={
+          <CaseActions
+            kase={kase}
+            hasDocuments={Boolean(documents?.length)}
+            analyzed={analyzed}
+            exposure={summaryQ.data?.exposure}
+          />
+        }
       />
 
       <CaseProgress
@@ -123,7 +140,9 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
 
       <AnalysisPanel kase={kase} documents={documents} analyzed={analyzed} canRun={can("upload_document")} />
 
-      {analyzing ? <ProcessingState events={stream.events} live={stream.connected} /> : null}
+      {runSince !== null ? (
+        <AnalysisStages events={stream.events} live={stream.connected} onClose={() => setRunSince(null)} />
+      ) : null}
       {kase.status === "failed" ? (
         <Notice tone="danger" title="The analysis stopped">
           Nothing was lost. Check the documents below, then run the analysis again.
@@ -150,7 +169,13 @@ export function CaseDetailView({ caseId }: { caseId: string }) {
         </Notice>
       ) : null}
       {kase.status === "resolved" ? (
-        <Notice tone="success" title="Resolved">
+        <Notice tone="success" title={outcomeLabel(kase.resolution_outcome) ? `Resolved: ${outcomeLabel(kase.resolution_outcome)}` : "Resolved"}>
+          {kase.recovered_amount ? (
+            <>
+              <strong>{formatMoney(kase.recovered_amount, kase.currency)}</strong> recovered.{" "}
+            </>
+          ) : null}
+          {kase.resolution_note ? <>{kase.resolution_note} </> : null}
           This case is closed. The full history remains in the activity trail.
         </Notice>
       ) : null}

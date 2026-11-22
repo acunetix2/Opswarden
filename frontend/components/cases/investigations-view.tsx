@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Bookmark, Download, Plus, Search, X } from "lucide-react";
+import { Bookmark, Download, Inbox, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -161,6 +161,11 @@ export function InvestigationsView() {
             <Button variant="secondary" onClick={exportCsv} disabled={!rows.length} icon={<Download className="size-4" aria-hidden />}>
               Export CSV
             </Button>
+            {can("create_case") && can("upload_document") ? (
+              <ButtonLink href="/app/intake" variant="secondary" icon={<Inbox className="size-4" aria-hidden />}>
+                Drop documents
+              </ButtonLink>
+            ) : null}
             {can("create_case") ? (
               <ButtonLink href="/app/investigations/new" variant="accent" icon={<Plus className="size-4" aria-hidden />}>
                 New investigation

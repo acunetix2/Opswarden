@@ -13,6 +13,8 @@ class EmailDraftOut(BaseModel):
     subject: str
     body: str
     recipient: str | None = None
+    # "register": typed by a person in the supplier register. "document": read from a supplier document, unconfirmed.
+    recipient_source: str | None = None
     requires_human_review: bool = True
     ai_assisted: bool = False
     model: str | None = None
@@ -52,6 +54,7 @@ class ApprovalOut(BaseModel):
     subject: str | None = None
     body: str | None = None
     recipient: str | None = None
+    recipient_source: str | None = None  # "document" = read from a supplier document
     requested_by: str
     reviewed_by: str | None = None
     reviewed_at: datetime | None = None

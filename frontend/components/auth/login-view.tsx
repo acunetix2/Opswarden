@@ -83,34 +83,32 @@ export function LoginView() {
       description="Sign in with your workspace account."
       footer={
         SHOW_DEMO ? (
-          <div className="rounded-[14px] border border-line bg-surface p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[13px] font-semibold text-ink">Try a demo account</p>
-              <span className="text-[11.5px] text-ink-3">
-                Password <code className="rounded-[5px] bg-canvas px-1.5 py-0.5 font-mono text-ink-2">{DEMO_PASSWORD}</code>
-              </span>
-            </div>
-            <ul className="mt-3 space-y-1.5">
+          <div className="border-t border-line pt-6">
+            <p className="text-[13px] text-ink-3">Or look around as a demo user</p>
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Demo accounts">
               {DEMO_ACCOUNTS.map((a) => (
-                <li key={a.email}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail(a.email);
-                      setPassword(DEMO_PASSWORD);
-                      setError(null);
-                    }}
-                    className="group flex w-full items-center justify-between gap-3 rounded-[10px] border border-line bg-canvas/50 px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-canvas"
-                  >
-                    <span className="truncate font-mono text-[12px] text-ink-2 group-hover:text-ink">{a.email}</span>
-                    <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11.5px] font-medium text-ink-2 group-hover:bg-brand-tint group-hover:text-brand-ink">
-                      {a.role}
-                    </span>
-                  </button>
-                </li>
+                <button
+                  key={a.email}
+                  type="button"
+                  title={a.email}
+                  aria-pressed={email === a.email}
+                  onClick={() => {
+                    setEmail(a.email);
+                    setPassword(DEMO_PASSWORD);
+                    setError(null);
+                  }}
+                  className={
+                    "pressable rounded-full border px-3.5 py-1.5 text-[13px] font-medium " +
+                    (email === a.email ? "border-ink bg-ink text-canvas" : "border-line-strong text-ink-2 hover:border-ink-3 hover:text-ink")
+                  }
+                >
+                  {a.role}
+                </button>
               ))}
-            </ul>
-            <p className="mt-2.5 text-[11.5px] text-ink-3">Click an account to fill in the form.</p>
+            </div>
+            <p className="mt-3 text-[12px] text-ink-3">
+              Fills in the form. Password <code className="font-mono text-ink-2">{DEMO_PASSWORD}</code>
+            </p>
           </div>
         ) : null
       }

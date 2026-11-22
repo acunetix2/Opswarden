@@ -27,6 +27,9 @@ class Supplier(Base):
     supplier_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # "document" when OpsWarden read the address from a supplier document and no person has confirmed it.
+    # Letters to such an address are never sent automatically.
+    contact_email_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     default_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     payment_terms: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -19,6 +19,9 @@ class OverviewMetrics(BaseModel):
     findings_in_period: int
     resolved_in_period: int
     exposure: list[MoneyAmount]
+    # Value settled in the business's favour, per currency.
+    recovered_in_period: list[MoneyAmount] = []
+    recovered_total: list[MoneyAmount] = []
 
 
 class SeriesPoint(BaseModel):
@@ -81,10 +84,24 @@ class WorkspaceSettingsOut(BaseModel):
     tts_available: bool = False
     stt_available: bool = False
     email_configured: bool
+    # Where uploaded documents are stored: "r2", "s3" or "local" (server disk).
+    storage_backend: str = "local"
     email_sender: str | None = None
     llm_configured: bool
     llm_provider: str | None
     approval_required: bool = True
+    # Automation. Nothing reaches a supplier without an approval, whatever these say.
+    auto_register: bool = True
+    auto_draft_letters: bool = True
+    auto_resolve_clean: bool = True
+    notify_reviewers: bool = True
+    send_on_approval: bool = True
+    follow_up_reminders: bool = True
+    record_credit_notes: bool = True
+    follow_up_days: int = 5
+    # Invoices by email: the workspace's address, or None when the inbox is off or not set up.
+    inbound_address: str | None = None
+    inbound_available: bool = False
 
 
 class WorkspaceSettingsUpdate(BaseModel):
@@ -93,6 +110,14 @@ class WorkspaceSettingsUpdate(BaseModel):
     price_tolerance: str | None = Field(default=None, max_length=32)
     quantity_tolerance: str | None = Field(default=None, max_length=32)
     reviewers_can_approve: bool | None = None
+    auto_register: bool | None = None
+    auto_draft_letters: bool | None = None
+    auto_resolve_clean: bool | None = None
+    notify_reviewers: bool | None = None
+    send_on_approval: bool | None = None
+    follow_up_reminders: bool | None = None
+    record_credit_notes: bool | None = None
+    follow_up_days: int | None = Field(default=None, ge=1, le=60)
 
 
 class NotificationOut(BaseModel):

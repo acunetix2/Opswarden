@@ -1,0 +1,11 @@
+# Tasks: OpsWarden MCP server
+- [x] 1. JSON-RPC stdio loop and dispatcher (`backend/mcp_server/opswarden_mcp.py`, `handle` + `main`)
+  - _Requirements: 1.1, 1.2_
+- [x] 2. API client with env-based sign-in and workspace selection
+  - _Requirements: 3.1–3.3_
+  - Falls back to a standard-library HTTP client when `httpx` isn't installed, so any Python 3 can run it.
+- [x] 3. Six read-only tools with input schemas
+  - _Requirements: 2.1, 2.2_
+- [x] 4. Tests in `backend/tests/test_mcp_server.py` (protocol, read-only surface, real API calls through the test client, tenant isolation, no credential echo)
+- [ ] 5. Register in `.kiro/settings/mcp.json` (config ready in `backend/mcp_server/kiro-mcp.json`; the agent isn't allowed to write `.kiro/settings/`, so a person copies it in)
+- [x] 6. Document usage in the README

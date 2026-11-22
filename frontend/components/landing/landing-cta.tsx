@@ -43,11 +43,18 @@ export function LandingCta({
 }
 
 /** Quiet "Sign in" link shown next to the sign-up button, hidden once signed in. */
-export function SignInLink({ className }: { className?: string }) {
+export function SignInLink({ className, light = false }: { className?: string; light?: boolean }) {
   const { status } = useSession();
   if (status === "authenticated" || !SIGNUP_ENABLED) return null;
   return (
-    <Link href="/login" className={cn("hidden rounded-full px-3 py-1.5 text-[13.5px] font-medium text-ink-2 hover:text-ink sm:inline-flex", className)}>
+    <Link
+      href="/login"
+      className={cn(
+        "hidden rounded-full px-3 py-1.5 text-[13.5px] font-medium transition-colors duration-300 sm:inline-flex",
+        light ? "text-[#F3EEE3]/80 hover:text-[#F3EEE3]" : "text-ink-2 hover:text-ink",
+        className,
+      )}
+    >
       Sign in
     </Link>
   );

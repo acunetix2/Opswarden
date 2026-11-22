@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck the frontend after a TypeScript change",
+      "trigger": "PostFileSave",
+      "matcher": "frontend/.*\\.tsx?$",
+      "action": {
+        "type": "command",
+        "command": "npx --prefix frontend tsc --noEmit -p frontend"
+      },
+      "timeout": 300
+    }
+  ]
+}

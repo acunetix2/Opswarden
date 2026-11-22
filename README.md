@@ -235,6 +235,40 @@ Changing a single character after approval breaks the hash, so the edit needs a 
 
 ---
 
+## Autopilot: what OpsWarden does on its own
+
+People make the decisions. OpsWarden does the routine work around them. Admins can switch each behaviour off under Settings > Automation; all are on by default.
+
+```mermaid
+flowchart LR
+    D[/Drop documents/] --> I[Smart intake:<br/>read, find the PO,<br/>file on the right case]
+    I --> R[Register:<br/>save supplier, contact details,<br/>PO and document numbers]
+    R --> A[Three-way match]
+    A -->|all three agree| C[Close as<br/>no discrepancy]
+    A -->|findings| L[Draft supplier letter,<br/>queue for approval,<br/>email approvers]
+    A -->|needs a check| V[Email reviewers]
+    L --> P{Approver}
+    P -->|approve| S[Send straight away]
+    P -->|reject| X[Nothing sent]
+```
+
+- **Smart intake** (`Drop documents` in the sidebar): drop invoices, receipts and POs without opening a case. Each file is read once, matched to an open case, a registered PO, a registered supplier or its own printed details, and the analysis starts once a case has an invoice plus a PO or receipt.
+- **Register from documents:** suppliers (with the email, phone and address printed for the seller), purchase orders and document numbers are saved as they are read. Entries a person typed are never overwritten, and every addition is in the activity log.
+- **Follow-up after analysis:** clean cases close, letters are drafted and queued, and approvers get one email per case per hour.
+- **Send on approval:** approving the letter sends it, with the same permission, hash and idempotency checks as the Send button.
+- **Live run view:** each analysis shows five stages (read, register, match, weigh findings, follow up) ticking as they complete.
+
+Nothing reaches a supplier without an approver seeing the exact text and recipient.
+
+---
+
+## Warden actions and recovery
+
+- **Warden** can suggest up to three next steps (open a case, run the analysis, prepare the letter). The server checks each one against your role and the case status, and nothing runs until you click it.
+- **Recovery:** resolving a case records the outcome (value recovered, corrected invoice, no discrepancy, written off) and the amount. The dashboard shows value recovered this period and all time, per currency.
+
+---
+
 ## Case lifecycle
 
 Status changes go through one controlled transition map. Clients can't set an arbitrary status.
@@ -527,7 +561,23 @@ Detailed threat model: [`OpsWarden_Documentation/SECURITY.md`](OpsWarden_Documen
 
 ## Built with Kiro
 
-OpsWarden was developed in the Kiro IDE. The `.kiro/` directory holds the project's hooks and skills, and [`OpsWarden_Documentation/KIRO-GUIDE.md`](OpsWarden_Documentation/KIRO-GUIDE.md) describes the spec-driven workflow.
+OpsWarden was developed in the Kiro IDE. The `.kiro/` directory holds the steering files, specs, hooks and custom agents used to build it, and [`OpsWarden_Documentation/KIRO-GUIDE.md`](OpsWarden_Documentation/KIRO-GUIDE.md) describes the spec-driven workflow.
+
+### OpsWarden MCP server
+
+`backend/mcp_server/opswarden_mcp.py` gives MCP clients (Kiro, other agents) read-only access to your cases, findings, approvals and purchase orders. It calls the normal API with your own sign-in, so every permission and workspace check still applies, and no tool changes data or sends email.
+
+Tools: `get_overview`, `list_cases`, `get_case`, `search`, `list_pending_approvals`, `list_purchase_orders`.
+
+To use it in Kiro, copy `backend/mcp_server/kiro-mcp.json` to `.kiro/settings/mcp.json` and set these environment variables:
+
+| Variable | Example |
+|---|---|
+| `OPSWARDEN_API_URL` | `https://opswarden.onrender.com` |
+| `OPSWARDEN_EMAIL` / `OPSWARDEN_PASSWORD` | your OpsWarden sign-in (or `OPSWARDEN_TOKEN`) |
+| `OPSWARDEN_WORKSPACE` | optional workspace name |
+
+It runs with any Python 3; `httpx` is used if installed.
 
 ## Documentation
 

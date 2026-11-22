@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Security review of API, agent and service changes",
+      "trigger": "PostFileSave",
+      "matcher": "backend/app/(api|agents|services|integrations)/.*\\.py$",
+      "action": {
+        "type": "agent",
+        "prompt": "A backend file that handles requests, agents or side effects just changed. Review only the change against .kiro/steering/security.md: tenant isolation (workspace_id on every query, load_case/load_document, 404 for non-members), server-side Permission checks, document text treated as data, supplier letters only through the approval gate with payload hash, no secrets or model output in logs, and audit events for every state change. Reply with a short list of concrete problems with file and line, or 'No security issues found'. Do not edit files."
+      },
+      "timeout": 300
+    }
+  ]
+}

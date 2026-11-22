@@ -1,0 +1,16 @@
+# Tasks: Smart intake
+- [x] 1. Add `record_extraction` to the orchestrator so an already-extracted document can be stored without re-reading it
+  - _Requirements: 2.2_
+- [x] 2. Implement `services/intake_service.py` routing helpers and `route_document`
+  - [x] 2.1 `reference_of` per document type, normalized with `normalize_reference`
+  - [x] 2.2 open-case lookup restricted to the workspace and to draft / needs_review / ready_for_approval / failed cases lacking the type
+  - [x] 2.3 registered PO lookup, then registered supplier lookup, then document-only
+  - _Requirements: 3.1–3.6_
+- [x] 3. Add `POST /workspaces/{id}/intake` with upload validation, extraction, routing, storage, audit, and background analysis
+  - _Requirements: 1.1–1.3, 4.1, 4.2, 5.1, 5.2_
+- [x] 4. Tests in `backend/tests/test_intake.py`, including a Hypothesis property for reference formatting
+  - _Requirements: 1.2, 3.1–3.6, 4.1_
+- [x] 5. Frontend: `/app/intake` drop zone with per-file type, progress and result cards linking to the case; nav item and shortcuts from Dashboard and Cases
+  - _Requirements: 5.1_
+  - Files are sent purchase orders first and invoices last (`lib/intake.ts`), so related documents land on one case before the analysis starts.
+- [ ] 6. Demo assets in `demo/` (scanned invoice and a delivery receipt that route to a registered PO)

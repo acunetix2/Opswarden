@@ -46,6 +46,8 @@ GOOD_REPLY = (
 def _northstar(client):
     ids = _seed_two_workspaces()
     hdr = _login(client, "admin_a@test.io")
+    # These tests count model calls for hand-drafted letters, so the automatic draft after analysis is off.
+    client.patch(f"/api/v1/workspaces/{ids['ws_a']}/settings", headers=hdr, json={"auto_draft_letters": False})
     case = _case(client, hdr, ids["ws_a"], supplier_name="Northstar", supplier_reference="PO-1048")
     _upload(client, hdr, case["id"], "purchase_order", {"supplier_name": "Northstar", "document_number": "PO-1048", "currency": "USD", "line_items": [{"sku": "B", "description": "Product B", "quantity": "50", "unit_price": "12.00"}]})
     _upload(client, hdr, case["id"], "delivery_receipt", {"supplier_name": "Northstar", "purchase_order_reference": "PO-1048", "line_items": [{"sku": "B", "received_quantity": "40"}]})
@@ -117,7 +119,7 @@ def test_grounding_rules():
 
 def test_deterministic_draft_unchanged_without_provider():
     subject, body = build_email_draft("OW-1", "Acme", "PO-9", [], "USD")
-    assert subject == "Clarification requested for PO-9" and "PO-9" in body
+    assert subject == "Clarification requested for PO-9 (OW-1)" and "PO-9" in body
 
 
 # ---- Call optimization ---------------------------------------------------------------

@@ -24,48 +24,14 @@ from app.schemas.document import (
     ExtractionReviewOut,
     WorkspaceDocumentOut,
 )
-from app.services import audit_service
+from app.services import audit_service, upload_rules
 
 router = APIRouter(tags=["documents"])
 
-_ALLOWED_TYPES = {"purchase_order", "invoice", "delivery_receipt"}
-
-# (mime, magic-signature-prefixes) accepted for the MVP.
-_SIGNATURES = {
-    "application/pdf": [b"%PDF-"],
-    "image/png": [b"\x89PNG\r\n\x1a\n"],
-    "image/jpeg": [b"\xff\xd8\xff"],
-    "text/plain": [],  # text fixtures: no signature requirement
-    "application/json": [],
-}
-
-
-def _detect_and_validate(filename: str, declared_mime: str, data: bytes) -> str:
-    name = filename.lower()
-    if name.endswith(".pdf"):
-        mime = "application/pdf"
-    elif name.endswith(".png"):
-        mime = "image/png"
-    elif name.endswith((".jpg", ".jpeg")):
-        mime = "image/jpeg"
-    elif name.endswith(".json"):
-        mime = "application/json"
-    elif name.endswith(".txt"):
-        mime = "text/plain"
-    else:
-        mime = declared_mime
-
-    if mime not in _SIGNATURES:
-        raise ApiUnsupported()
-
-    sigs = _SIGNATURES[mime]
-    if sigs and not any(data.startswith(s) for s in sigs):
-        raise ApiUnsupported()
-    return mime
-
-
-class ApiUnsupported(Exception):
-    pass
+_ALLOWED_TYPES = upload_rules.ALLOWED_TYPES
+# Kept under the old names: other modules and tests import them from here.
+_detect_and_validate = upload_rules.detect_mime
+ApiUnsupported = upload_rules.UnsupportedFile
 
 
 @router.post("/cases/{case_id}/documents", response_model=DocumentUploadResponse, status_code=202)
@@ -149,6 +115,7 @@ def list_documents(
             size_bytes=d.size_bytes,
             processing_status=d.processing_status,
             error_code=d.error_code,
+            document_number=d.document_number,
             created_at=d.created_at,
         )
         for d in rows
@@ -180,6 +147,7 @@ def list_workspace_documents(
             size_bytes=d.size_bytes,
             processing_status=d.processing_status,
             error_code=d.error_code,
+            document_number=d.document_number,
             created_at=d.created_at,
             case_number=number,
             case_title=title,
@@ -204,6 +172,7 @@ def get_document(
         size_bytes=doc.size_bytes,
         processing_status=doc.processing_status,
         error_code=doc.error_code,
+        document_number=doc.document_number,
         created_at=doc.created_at,
         case_number=case.case_number if case else None,
         case_title=case.title if case else None,
@@ -285,6 +254,7 @@ def get_extracted_fields(
                 source_page=r.source_page,
                 source_text=r.source_text,
                 review_status=r.review_status,
+                box=json.loads(r.bbox_json) if r.bbox_json else None,
             )
         )
     return ExtractionReviewOut(

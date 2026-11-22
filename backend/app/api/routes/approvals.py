@@ -10,6 +10,7 @@ from app.api.deps import get_current_user, load_case
 from app.api.errors import bad_request, conflict, forbidden, not_found
 from app.core.permissions import Permission, role_has_permission
 from app.db import get_db, new_uuid, utcnow
+from app.integrations.email import templates
 from app.integrations.email.base import EmailMessage
 from app.integrations.email.provider import get_email_provider
 from app.models.approval import Approval
@@ -26,7 +27,8 @@ from app.schemas.approval import (
     RequestApprovalRequest,
     RequestApprovalResponse,
 )
-from app.services import approval_service, audit_service, case_service, investigation_service, policy_service
+from app.api.errors import ApiError
+from app.services import approval_service, audit_service, automation_service, case_service, policy_service
 
 router = APIRouter(tags=["approvals"])
 
@@ -57,52 +59,8 @@ def create_email_draft(
     case, ctx = bundle
     ctx.require(Permission.GENERATE_RECOMMENDATION)
 
-    findings = db.execute(select(Finding).where(Finding.case_id == case.id)).scalars().all()
-    draft = investigation_service.draft_supplier_email(
-        case.case_number, case.supplier_name, case.supplier_reference, findings, case.currency
-    )
-    rationale = investigation_service.build_summary(case.title, case.supplier_name, findings)
-
-    # The address comes from the supplier register (entered by a person), never guessed.
-    recipient = None
-    if case.supplier_id:
-        from app.models.registry import Supplier
-
-        supplier = db.get(Supplier, case.supplier_id)
-        if supplier and supplier.workspace_id == case.workspace_id:
-            recipient = supplier.contact_email
-
-    payload = {"subject": draft.subject, "body": draft.body, "recipient": recipient, "case_id": case.id}
-    rec = Recommendation(
-        workspace_id=case.workspace_id,
-        case_id=case.id,
-        recommendation_type="supplier_clarification_email",
-        summary=draft.subject,
-        rationale=rationale,
-        payload_json=json.dumps(payload),
-        status="draft",
-        generated_by=draft.provider,
-        model=draft.model,
-    )
-    db.add(rec)
-    db.flush()
-    audit_service.record_event(
-        db,
-        workspace_id=case.workspace_id,
-        case_id=case.id,
-        event_type="recommendation.generated",
-        actor_type="agent",
-        # Provider metadata only; never the prompt or model output.
-        payload={
-            "recommendation_id": rec.id,
-            "type": rec.recommendation_type,
-            "provider": draft.provider,
-            "model": draft.model,
-            "ai_assisted": draft.ai_assisted,
-            "fallback_reason": draft.fallback_reason,
-        },
-        commit=False,
-    )
+    # The address comes from the supplier register, and an approver sees it before sending.
+    rec, draft, recipient = automation_service.draft_letter(db, case)
     db.commit()
     return EmailDraftOut(
         recommendation_id=rec.id,
@@ -111,6 +69,7 @@ def create_email_draft(
         subject=draft.subject,
         body=draft.body,
         recipient=recipient,
+        recipient_source=json.loads(rec.payload_json).get("recipient_source") or ("register" if recipient else None),
         requires_human_review=True,
         ai_assisted=draft.ai_assisted,
         model=draft.model if draft.ai_assisted else None,
@@ -142,38 +101,35 @@ def request_approval(
         stored["body"] = body
     if recipient is not None:
         stored["recipient"] = recipient
+        stored.pop("recipient_source", None)  # a person typed or confirmed the address
     rec.payload_json = json.dumps(stored)
     db.add(rec)
 
-    phash = approval_service.payload_hash(stored)
-    approval = Approval(
-        workspace_id=rec.workspace_id,
-        case_id=rec.case_id,
-        recommendation_id=rec.id,
-        action_type=rec.recommendation_type,
-        action_payload_json=json.dumps(stored),
-        payload_hash=phash,
-        status="pending",
-        requested_by=user.id,
-        idempotency_key=new_uuid(),
-    )
-    db.add(approval)
-    db.flush()
-    audit_service.record_event(
-        db,
-        workspace_id=rec.workspace_id,
-        case_id=rec.case_id,
-        event_type="approval.requested",
-        actor_type="user",
-        actor_id=user.id,
-        payload={"approval_id": approval.id, "payload_hash": phash},
-        commit=False,
-    )
+    approval = automation_service.queue_for_approval(db, rec, requested_by=user.id, actor_type="user")
     case = db.get(Case, rec.case_id)
     if case:
         case_service.set_status(db, case, "ready_for_approval", actor_type="user", actor_id=user.id)
+        if policy_service.get_automation(db, rec.workspace_id).notify_reviewers:
+            automation_service.notify_people(
+                db, case, "approval", f"{case.case_number} letter waiting for approval",
+                [
+                    f"{user.full_name or user.email} asked for approval of a letter to "
+                    f"{case.supplier_name or 'the supplier'} on {case.case_number}.",
+                    "Nothing has been sent to the supplier.",
+                ],
+                "/app/approvals", approval.id,
+            )
     db.commit()
-    return RequestApprovalResponse(approval_id=approval.id, status="pending", payload_hash=phash)
+    return RequestApprovalResponse(approval_id=approval.id, status="pending", payload_hash=approval.payload_hash)
+
+
+def _reply_address(db: Session, workspace_id: str) -> str | None:
+    """Supplier replies go to the workspace inbox, when it's on, so OpsWarden can file them."""
+    from app.models.workspace import Workspace
+    from app.services import inbound_service
+
+    ws = db.get(Workspace, workspace_id)
+    return inbound_service.address_for(ws) if ws else None
 
 
 def _user_name(db: Session, user_id: str | None) -> str | None:
@@ -195,13 +151,14 @@ def _approval_out(approval: Approval, db: Session) -> ApprovalOut:
         supplier_name=case.supplier_name if case else None,
         rationale=rec.rationale if rec else None,
         comment=approval.comment,
-        requested_by_name=_user_name(db, approval.requested_by),
+        requested_by_name="OpsWarden (automatic)" if payload.get("automatic") else _user_name(db, approval.requested_by),
         reviewed_by_name=_user_name(db, approval.reviewed_by),
         action_type=approval.action_type,
         status=approval.status,
         subject=payload.get("subject"),
         body=payload.get("body"),
         recipient=payload.get("recipient"),
+        recipient_source=payload.get("recipient_source"),
         requested_by=approval.requested_by,
         reviewed_by=approval.reviewed_by,
         reviewed_at=approval.reviewed_at,
@@ -265,6 +222,22 @@ def decide_approval(
         commit=False,
     )
     db.commit()
+
+    # Approving is the person's decision; sending straight after saves a second click.
+    # Every execute-time check (permission, policy, payload hash, recipient) still runs.
+    if (
+        approval.status == "approved"
+        and policy_service.get_automation(db, approval.workspace_id).send_on_approval
+        and get_email_provider().configured
+        and role_has_permission(member.role, Permission.EXECUTE_ACTION)
+        # The approver saw this exact recipient on the approval (it's in the hashed payload).
+        and json.loads(approval.action_payload_json).get("recipient")
+    ):
+        try:
+            execute_approval(approval.id, user, db)
+        except ApiError:
+            db.rollback()  # stays approved; the person can retry with Send
+        db.refresh(approval)
     return _approval_out(approval, db)
 
 
@@ -331,7 +304,14 @@ def execute_approval(
         raise bad_request("RECIPIENT_REQUIRED", "A verified recipient is required before sending.")
     try:
         result = provider.send(
-            EmailMessage(recipient=recipient, subject=stored["subject"], body=stored["body"]),
+            # The approved text exactly; the HTML part only lays it out.
+            EmailMessage(
+                recipient=recipient,
+                subject=stored["subject"],
+                body=stored["body"],
+                html=templates.render_letter(stored["body"]),
+                reply_to=_reply_address(db, approval.workspace_id),
+            ),
             idempotency_key=approval.idempotency_key,
         )
     except Exception:
@@ -364,8 +344,9 @@ def execute_approval(
         commit=False,
     )
     case = db.get(Case, approval.case_id)
-    if case:
-        case_service.set_status(db, case, "resolved")
+    if case and case_service.can_transition(case.status, "in_progress"):
+        # Sent: the case now waits for the supplier. A reply, a credit note or a person closes it.
+        case_service.set_status(db, case, "in_progress", actor_type="integration")
     db.commit()
     return ExecuteResponse(
         approval_id=approval.id, status="executed", provider_reference=result.provider_reference

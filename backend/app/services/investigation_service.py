@@ -53,7 +53,8 @@ def build_email_draft(
 ) -> tuple[str, str]:
     active = [f for f in findings if f.status != "dismissed" and f.finding_type != "missing_document"]
     ref = supplier_reference or case_number
-    subject = f"Clarification requested for {ref}"
+    # The case number lets OpsWarden match the supplier's reply back to this case.
+    subject = f"Clarification requested for {ref}" + (f" ({case_number})" if ref != case_number else "")
 
     body_lines = [
         f"Hello{f' {supplier}' if supplier else ''},",

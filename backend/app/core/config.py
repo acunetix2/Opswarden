@@ -103,7 +103,14 @@ class Settings(BaseSettings):
     smtp_username: str = Field(default="")
     smtp_password: str = Field(default="")
     smtp_from: str = Field(default="")
+    # Display name inboxes show for SMTP_FROM, e.g. "OpsWarden <support@...>". Ignored if SMTP_FROM already has one.
+    smtp_from_name: str = Field(default="OpsWarden")
     smtp_use_tls: bool = Field(default=True)
+    # Invoices by email. Forwarded mail arrives at invoices+<token>@INBOUND_EMAIL_DOMAIN and is
+    # posted to /api/v1/inbound/email by the Cloudflare Email Worker with AUTOMATION_SECRET.
+    inbound_email_domain: str = Field(default="")
+    # Shared secret for the inbound email webhook and the scheduled follow-up run. Empty disables both.
+    automation_secret: str = Field(default="")
 
     # Self-service sign-up: anyone can create an account and a new workspace they
     # administer. It never grants access to an existing workspace; that needs an invitation.

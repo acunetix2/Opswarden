@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { StateBadge } from "@/components/status/status-badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { AutomationCard } from "./automation-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ErrorState, SkeletonRows } from "@/components/ui/states";
 import { formatBytes } from "@/lib/format";
@@ -96,13 +97,26 @@ export function SettingsView() {
             </CardBody>
           </Card>
 
+          <AutomationCard settings={s} canEdit={isAdmin} />
+
           <Card className="xl:col-span-2">
             <CardHeader
-              index="04"
+              index="05"
               title="Integrations"
               description="Credentials live in the server's secret store, never in the browser. OpsWarden shows the real state and never pretends an action happened."
             />
             <ul className="divide-y divide-line">
+              <Integration
+                code="R2"
+                name={`Document storage · ${s.storage_backend === "r2" ? "Cloudflare R2" : s.storage_backend === "s3" ? "S3 bucket" : "server disk"}`}
+                connected={s.storage_backend === "r2" || s.storage_backend === "s3"}
+                description={
+                  s.storage_backend === "r2" || s.storage_backend === "s3"
+                    ? "Uploaded documents are kept in a private bucket and streamed only to signed-in members."
+                    : "Uploaded documents are saved on the API server's disk. On hosts like Render that disk is wiped on every deploy."
+                }
+                setup="Set STORAGE_BACKEND=r2 with R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY on the API server, then restart it."
+              />
               <Integration
                 code="SMTP"
                 name={`Email sending${s.email_sender ? ` · ${s.email_sender}` : ""}`}

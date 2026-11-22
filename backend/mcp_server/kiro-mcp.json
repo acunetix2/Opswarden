@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "opswarden": {
+      "command": "python",
+      "args": ["backend/mcp_server/opswarden_mcp.py"],
+      "env": {
+        "OPSWARDEN_API_URL": "${OPSWARDEN_API_URL}",
+        "OPSWARDEN_EMAIL": "${OPSWARDEN_EMAIL}",
+        "OPSWARDEN_PASSWORD": "${OPSWARDEN_PASSWORD}",
+        "OPSWARDEN_WORKSPACE": "${OPSWARDEN_WORKSPACE}"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "get_overview",
+        "list_cases",
+        "get_case",
+        "search",
+        "list_pending_approvals",
+        "list_purchase_orders"
+      ]
+    }
+  }
+}

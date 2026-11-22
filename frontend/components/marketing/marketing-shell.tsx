@@ -6,8 +6,8 @@ import { Reveal } from "@/components/landing/reveal";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 
-/** Frame for every public page: header, content, footer. */
-export function MarketingShell({ children }: { children: ReactNode }) {
+/** Frame for every public page: header, content, footer. `overlayHeader` floats it over a dark hero. */
+export function MarketingShell({ children, overlayHeader = false }: { children: ReactNode; overlayHeader?: boolean }) {
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
       <a
@@ -16,8 +16,8 @@ export function MarketingShell({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
-      <SiteHeader />
-      <main id="content" className="flex-1">
+      <SiteHeader overlay={overlayHeader} />
+      <main id="content" className={overlayHeader ? "flex-1" : "flex-1 pt-16"}>
         {children}
       </main>
       <SiteFooter />
@@ -93,7 +93,7 @@ export function ClosingCta({ title = "See it on your own documents", text = "The
           className="relative overflow-hidden rounded-[24px] px-8 py-12 text-[#F3EEE3] sm:px-12 sm:py-14"
           style={{
             backgroundColor: "#11151c",
-            backgroundImage: "linear-gradient(100deg, rgb(11 13 17 / 0.92) 35%, rgb(11 13 17 / 0.45)), url(/auth-bg.svg)",
+            backgroundImage: "linear-gradient(100deg, rgb(11 13 17 / 0.94) 35%, rgb(11 13 17 / 0.55)), url(/landing/stockroom.jpg)",
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}

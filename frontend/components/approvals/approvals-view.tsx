@@ -292,6 +292,7 @@ export function ApprovalsView() {
               canDecide={canDecide}
               canExecute={can("execute_action") && policyAllows}
               emailConfigured={settings?.email_configured ?? false}
+              sendOnApproval={settings?.send_on_approval ?? true}
             />
           ))
         )}

@@ -47,6 +47,9 @@ class CaseOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
+    resolution_outcome: str | None = None
+    recovered_amount: str | None = None  # decimal string
+    resolution_note: str | None = None
 
 
 class AnalyzeResponse(BaseModel):

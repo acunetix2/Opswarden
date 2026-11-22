@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import GUID, Base, new_uuid, utcnow
@@ -32,3 +33,7 @@ class Case(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Recovery tracking: set when a case is resolved, cleared when it is reopened.
+    resolution_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    recovered_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)

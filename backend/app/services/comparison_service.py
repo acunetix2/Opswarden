@@ -184,6 +184,15 @@ def _qty(item: LineItem | None, received: bool = False) -> Decimal | None:
     return parse_decimal(item.quantity)
 
 
+def _row_path(ref: "DocumentRef | None", item: LineItem | None, key: str) -> str:
+    """line_items[N].key for the row this item came from, so evidence points at one cell."""
+    if ref is not None and item is not None:
+        for i, candidate in enumerate(ref.doc.line_items):
+            if candidate is item:
+                return f"line_items[{i}].{key}"
+    return f"line_items.{key}"
+
+
 def _label(item: LineItem | None) -> str:
     if item is None:
         return "item"
@@ -199,6 +208,7 @@ def run_comparison(
     delivery: DocumentRef | None,
     config: ComparisonConfig,
     existing_invoice_numbers: set[str] | None = None,
+    price_history: dict[str, "PricePoint"] | None = None,
 ) -> list[Finding]:
     findings: list[Finding] = []
     po_doc = po.doc if po else None
@@ -281,7 +291,80 @@ def run_comparison(
     if inv_doc:
         findings.extend(_check_totals(invoice, currency))
 
+    # --- Price history: the same item cost less on this supplier's earlier documents ---
+    if inv_doc and price_history:
+        findings.extend(check_price_history(invoice, po, price_history, config, currency))
+
     return findings
+
+
+@dataclass
+class PricePoint:
+    """An earlier price for one item from this supplier, with where it was read."""
+
+    price: Decimal
+    document_id: str
+    document_type: str
+    field_path: str
+    case_number: str
+    when: str  # YYYY-MM-DD
+
+
+def check_price_history(
+    invoice: DocumentRef,
+    po: DocumentRef | None,
+    history: dict[str, PricePoint],
+    config: ComparisonConfig,
+    currency: str,
+) -> list[Finding]:
+    """PRICE_ABOVE_HISTORY: the invoice charges more than the supplier charged last time.
+
+    A three-way match passes when the PO was raised at the new price, so gradual increases
+    slip through. This compares each invoiced item with its most recent earlier price for
+    the same supplier. Lines whose price already differs from this PO are left to
+    UNIT_PRICE_MISMATCH. Needs a person: the increase may be agreed."""
+    out: list[Finding] = []
+    po_prices: dict[str, Decimal] = {}
+    if po is not None:
+        for item in po.doc.line_items:
+            key, price = normalize_sku(item.sku), parse_decimal(item.unit_price)
+            if key and price is not None:
+                po_prices[key] = price
+    for i, item in enumerate(invoice.doc.line_items):
+        key, price = normalize_sku(item.sku), parse_decimal(item.unit_price)
+        base = history.get(key) if key else None
+        if base is None or price is None or base.price <= 0:
+            continue
+        increase = price - base.price
+        if increase <= config.price_tolerance:
+            continue
+        if key in po_prices and abs(price - po_prices[key]) > config.price_tolerance:
+            continue  # already a PO price mismatch
+        qty = parse_decimal(item.quantity)
+        pct = (increase / base.price * 100).quantize(Decimal("0.1"))
+        label = _label(item)
+        out.append(
+            Finding(
+                rule_id="PRICE_ABOVE_HISTORY",
+                finding_type="price_increase",
+                severity="medium",
+                title=f"Price is higher than last time: {label}",
+                description=(
+                    f"{label} cost {base.price} on {base.case_number} ({base.when}). This invoice charges {price}, "
+                    f"{pct}% more. Check whether the increase was agreed."
+                ),
+                expected_value={"field": "unit_price", "value": str(base.price), "source": base.case_number},
+                observed_value={"field": "unit_price", "value": str(price)},
+                impact_amount=increase * qty if qty is not None else None,
+                currency=currency,
+                evidence=[
+                    EvidenceRef("invoice", invoice.document_id, f"line_items[{i}].unit_price"),
+                    EvidenceRef(base.document_type, base.document_id, base.field_path),
+                ],
+                requires_review=True,
+            )
+        )
+    return out
 
 
 def _check_supplier(po, invoice, delivery) -> list[Finding]:
@@ -384,9 +467,9 @@ def _check_line(ml: MatchedLine, po, invoice, delivery, config: ComparisonConfig
     label = _label(ml.invoice or ml.po or ml.delivery)
     qtol = config.quantity_tolerance
 
-    po_ev = EvidenceRef("purchase_order", po.document_id if po else None, "line_items.quantity")
-    inv_ev = EvidenceRef("invoice", invoice.document_id if invoice else None, "line_items.quantity")
-    del_ev = EvidenceRef("delivery_receipt", delivery.document_id if delivery else None, "line_items.received_quantity")
+    po_ev = EvidenceRef("purchase_order", po.document_id if po else None, _row_path(po, ml.po, "quantity"))
+    inv_ev = EvidenceRef("invoice", invoice.document_id if invoice else None, _row_path(invoice, ml.invoice, "quantity"))
+    del_ev = EvidenceRef("delivery_receipt", delivery.document_id if delivery else None, _row_path(delivery, ml.delivery, "received_quantity"))
 
     if ml.match_method in ("fuzzy", "unmatched"):
         out.append(
@@ -486,7 +569,10 @@ def _check_line(ml: MatchedLine, po, invoice, delivery, config: ComparisonConfig
                 observed_value={"field": "unit_price", "value": str(inv_price)},
                 impact_amount=impact,
                 currency=currency,
-                evidence=[po_ev, inv_ev],
+                evidence=[
+                    EvidenceRef("purchase_order", po.document_id if po else None, _row_path(po, ml.po, "unit_price")),
+                    EvidenceRef("invoice", invoice.document_id if invoice else None, _row_path(invoice, ml.invoice, "unit_price")),
+                ],
                 requires_review=False,
             )
         )

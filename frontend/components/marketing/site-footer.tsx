@@ -1,51 +1,40 @@
 import Link from "next/link";
-import { ArrowUpRight, Mail } from "lucide-react";
 
 import { LogoMark } from "@/components/layout/logo";
 import { SITE } from "@/lib/site";
 
 import { FOOTER_COLUMNS, LEGAL_LINKS } from "./nav-config";
 
+/** Compact footer: brand and three short link columns, then one legal line. */
 export function SiteFooter() {
   const year = new Date().getFullYear();
   return (
-    <footer className="relative overflow-hidden bg-[#0f1217] text-[#F3EEE3]">
-      <div aria-hidden className="pointer-events-none absolute inset-0 [background-image:radial-gradient(50%_60%_at_85%_0%,rgb(238_106_36/0.16),transparent_70%)]" />
-
-      <div className="relative mx-auto max-w-6xl px-5 pt-16 pb-10 sm:px-6">
-        {/* Top band: brand and contact */}
-        <div className="grid gap-10 border-b border-white/10 pb-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)]">
-          <div>
-            <Link href="/" className="inline-flex items-center gap-2.5" aria-label="OpsWarden home">
-              <span className="grid size-11 place-items-center rounded-[12px] bg-[#fffdf9]">
-                <LogoMark className="size-9" />
-              </span>
-              <span className="flex items-baseline text-[21px] leading-none">
+    <footer className="border-t border-line bg-canvas text-ink">
+      <div className="mx-auto max-w-5xl px-5 pt-12 pb-8 sm:px-6">
+        <div className="grid gap-10 md:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="max-w-xs">
+            <Link href="/" className="group inline-flex items-center gap-2.5" aria-label="OpsWarden home">
+              <LogoMark className="size-8 transition-transform duration-300 ease-out group-hover:rotate-[-6deg]" />
+              <span className="flex items-baseline text-[19px] leading-none">
                 <span className="font-semibold tracking-tight">Ops</span>
                 <span className="display italic">Warden</span>
               </span>
             </Link>
-            <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-[#F3EEE3]/65">
-              Three-way matching for purchase orders, delivery receipts and invoices, with evidence on every finding and a person
-              approving every next step.
+            <p className="mt-3 text-[13.5px] leading-relaxed text-ink-3">
+              Every line of every invoice, <span className="display text-[1.1em] italic text-ink-2">checked</span> before it&apos;s paid.
             </p>
-            <a
-              href={`mailto:${SITE.supportEmail}`}
-              className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 px-3.5 py-1.5 text-[13px] text-[#F3EEE3]/85 transition-colors hover:border-white/30 hover:text-[#F3EEE3]"
-            >
-              <Mail className="size-3.5" aria-hidden />
+            <a href={`mailto:${SITE.supportEmail}`} className="mt-3 inline-block text-[13px] text-ink-2 underline-offset-4 hover:text-ink hover:underline">
               {SITE.supportEmail}
             </a>
           </div>
-
-          <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-            {FOOTER_COLUMNS.map((col) => (
+          <nav aria-label="Footer" className="grid grid-cols-3 gap-x-10 gap-y-6 sm:gap-x-14">
+            {FOOTER_COLUMNS.filter((col) => col.title !== "Solutions").map((col) => (
               <div key={col.title}>
-                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#F3EEE3]/45">{col.title}</h2>
-                <ul className="mt-4 space-y-2.5">
-                  {col.links.map((l) => (
+                <h2 className="text-[12.5px] font-medium text-ink-3">{col.title}</h2>
+                <ul className="mt-3 space-y-2">
+                  {col.links.slice(0, 4).map((l) => (
                     <li key={l.href}>
-                      <Link href={l.href} className="text-[14px] text-[#F3EEE3]/75 transition-colors duration-150 hover:text-[#F3EEE3]">
+                      <Link href={l.href} className="text-[13.5px] text-ink-2 transition-colors duration-150 hover:text-ink">
                         {l.label}
                       </Link>
                     </li>
@@ -56,36 +45,20 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        {/* Call to action strip */}
-        <div className="flex flex-col gap-4 border-b border-white/10 py-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[18px] font-semibold tracking-[-0.01em]">Ready to run your first three-way match?</p>
-          <div className="flex gap-2">
-            <Link href="/signup" className="btn inline-flex h-10 items-center rounded-[8px] bg-brand px-4 text-[14px] font-medium text-on-brand hover:bg-brand-strong">
-              Create free account
-            </Link>
-            <Link href="/contact" className="btn inline-flex h-10 items-center gap-1 rounded-[8px] border border-white/20 px-4 text-[14px] font-medium hover:bg-white/10">
-              Book a walkthrough
-              <ArrowUpRight className="size-4" aria-hidden />
-            </Link>
-          </div>
-        </div>
-
-        {/* Legal bar */}
-        <div className="flex flex-col gap-4 pt-6 text-[12.5px] text-[#F3EEE3]/55 md:flex-row md:items-center md:justify-between">
-          <p>&copy; {year} {SITE.legalName}. All rights reserved.</p>
-          <ul className="flex flex-wrap gap-x-5 gap-y-2">
+        <div className="mt-10 flex flex-col gap-3 border-t border-line pt-5 text-[12px] text-ink-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            &copy; {year} {SITE.legalName}. OpsWarden drafts messages for people to approve; it isn&apos;t legal, tax or accounting advice.
+          </p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1">
             {LEGAL_LINKS.map((l) => (
               <li key={l.href}>
-                <Link href={l.href} className="hover:text-[#F3EEE3]">
-                  {l.label}
+                <Link href={l.href} className="hover:text-ink">
+                  {l.label.replace(" Policy", "").replace("Terms of Service", "Terms")}
                 </Link>
               </li>
             ))}
           </ul>
         </div>
-        <p className="mt-4 text-[12px] text-[#F3EEE3]/40">
-          OpsWarden compares documents and drafts messages for people to approve. It does not provide legal, tax or accounting advice.
-        </p>
       </div>
     </footer>
   );

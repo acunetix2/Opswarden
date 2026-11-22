@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Inbox, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { ButtonLink } from "@/components/ui/button";
@@ -36,6 +36,8 @@ export function OverviewView() {
   const { data, error, isFetching, refetch } = useOverviewQuery({ workspaceId: workspace.id, days: Number(period) });
   const m = data?.metrics;
   const exposure = m?.exposure ?? [];
+  const recovered = m?.recovered_in_period ?? [];
+  const recoveredTotal = m?.recovered_total ?? [];
 
   return (
     <div className="space-y-6">
@@ -74,9 +76,16 @@ export function OverviewView() {
         }
         actions={
           can("create_case") ? (
-            <ButtonLink href="/app/investigations/new" variant="accent" icon={<Plus className="size-4" aria-hidden />}>
-              New investigation
-            </ButtonLink>
+            <>
+              {can("upload_document") ? (
+                <ButtonLink href="/app/intake" variant="secondary" icon={<Inbox className="size-4" aria-hidden />}>
+                  Drop documents
+                </ButtonLink>
+              ) : null}
+              <ButtonLink href="/app/investigations/new" variant="accent" icon={<Plus className="size-4" aria-hidden />}>
+                New investigation
+              </ButtonLink>
+            </>
           ) : null
         }
       />
@@ -92,7 +101,7 @@ export function OverviewView() {
       <section aria-label="Key figures">
         <MetricStrip>
           {!m ? (
-            Array.from({ length: 4 }, (_, i) => <MetricCellSkeleton key={i} />)
+            Array.from({ length: 5 }, (_, i) => <MetricCellSkeleton key={i} />)
           ) : (
             <>
               <MetricCell
@@ -144,6 +153,24 @@ export function OverviewView() {
                     <>Open findings with a calculated monetary impact · precise totals on the case pages</>
                   ) : (
                     <>All discrepancies settled or non-monetary</>
+                  )
+                }
+              />
+              <MetricCell
+                href="/app/investigations?status=resolved"
+                label="Recovered"
+                value={recovered.length ? formatMoneyValue(recovered[0], { compact: true }) : "—"}
+                detail={
+                  recovered.length ? (
+                    <>
+                      Settled in your favour in {period} days
+                      {recovered.length > 1 ? <> · also {recovered.slice(1).map((e) => formatMoneyValue(e)).join(", ")}</> : null}
+                      {recoveredTotal.length ? <> · {recoveredTotal.map((e) => formatMoneyValue(e)).join(" + ")} all time</> : null}
+                    </>
+                  ) : recoveredTotal.length ? (
+                    <>Nothing in {period} days · {recoveredTotal.map((e) => formatMoneyValue(e)).join(" + ")} all time</>
+                  ) : (
+                    <>Recorded when a reviewer resolves a case with a credit or corrected invoice</>
                   )
                 }
               />

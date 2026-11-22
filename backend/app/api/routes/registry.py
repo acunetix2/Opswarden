@@ -36,6 +36,7 @@ from app.schemas.registry import (
     SearchOut,
     SupplierIn,
     SupplierPatch,
+    SupplierScorecardOut,
 )
 from app.schemas.workspace import MoneyAmount
 from app.services import audit_service
@@ -265,6 +266,7 @@ def update_supplier(
             setattr(s, field, (data[field] or "").strip() or None)
     if "contact_email" in data:
         s.contact_email = str(data["contact_email"]).lower() if data["contact_email"] else None
+        s.contact_email_source = None  # a person entered or confirmed it
     if data.get("default_currency"):
         s.default_currency = data["default_currency"].upper()
     if data.get("is_active") is not None:
@@ -314,6 +316,83 @@ def import_suppliers_from_cases(
 
 
 # ---- purchase orders ---------------------------------------------------------------
+
+
+@router.get("/registry/suppliers/{supplier_id}/scorecard", response_model=SupplierScorecardOut)
+def supplier_scorecard(supplier_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SupplierScorecardOut:
+    """How often this supplier short-ships or overbills, and what has been recovered."""
+    from app.models.approval import Approval
+    from app.models.audit_event import AuditEvent
+    from app.schemas.registry import ScorecardCase
+    from app.services import scorecard_service
+
+    s, ctx = _load_supplier(db, user, supplier_id)
+    ctx.require(Permission.READ_CASE)
+    cases = _cases_for_suppliers(db, s.workspace_id, [s]).get(s.id, [])
+    ids = [c.id for c in cases]
+    findings: dict[str, list[Finding]] = defaultdict(list)
+    analyzed: set[str] = set()
+    sent: dict[str, object] = {}
+    replied: dict[str, object] = {}
+    if ids:
+        for f in db.execute(select(Finding).where(Finding.case_id.in_(ids))).scalars():
+            findings[f.case_id].append(f)
+        for case_id, kind, at in db.execute(
+            select(AuditEvent.case_id, AuditEvent.event_type, AuditEvent.created_at).where(
+                AuditEvent.case_id.in_(ids), AuditEvent.event_type.in_(("comparison.completed", "supplier.replied"))
+            )
+        ).all():
+            if kind == "comparison.completed":
+                analyzed.add(case_id)
+            elif case_id not in replied or at < replied[case_id]:
+                replied[case_id] = at  # first reply
+        for case_id, at in db.execute(
+            select(Approval.case_id, Approval.executed_at).where(
+                Approval.case_id.in_(ids), Approval.status == "executed",
+                Approval.action_type == "supplier_clarification_email",
+            )
+        ).all():
+            if at and (case_id not in sent or at < sent[case_id]):
+                sent[case_id] = at  # first letter
+    facts = []
+    for c in cases:
+        counted = [f for f in findings[c.id] if f.status != "dismissed"]
+        exposure = sum(
+            (abs(Decimal(str(f.impact_amount))) for f in counted
+             if f.status in ("open", "confirmed", "needs_review") and f.impact_amount is not None and (f.currency or c.currency) == c.currency),
+            Decimal("0"),
+        )
+        facts.append(scorecard_service.CaseFacts(
+            case_id=c.id, case_number=c.case_number, status=c.status, currency=c.currency,
+            analyzed=c.id in analyzed, rules={f.rule_id for f in counted}, open_exposure=exposure,
+            recovered=Decimal(str(c.recovered_amount)) if c.recovered_amount is not None else None,
+            outcome=c.resolution_outcome, letter_sent_at=sent.get(c.id), replied_at=replied.get(c.id), updated_at=c.updated_at,
+        ))
+    card = scorecard_service.score(facts)
+    recent = sorted(facts, key=lambda f: f.updated_at, reverse=True)[:6]
+    return SupplierScorecardOut(
+        supplier_id=s.id,
+        supplier_name=s.name,
+        cases=card.cases,
+        analyzed=card.analyzed,
+        with_issues=card.with_issues,
+        short_shipments=card.short_shipments,
+        overbilling=card.overbilling,
+        issue_rate=str(card.issue_rate) if card.issue_rate is not None else None,
+        open_exposure=_money(card.open_exposure),
+        recovered=_money(card.recovered),
+        letters_sent=card.letters_sent,
+        replies=card.replies,
+        average_reply_days=str(card.average_reply_days) if card.average_reply_days is not None else None,
+        rule_counts=card.rule_counts,
+        recent_cases=[
+            ScorecardCase(
+                id=f.case_id, case_number=f.case_number, status=f.status, outcome=f.outcome,
+                issues=sorted(f.rules - {"MISSING_DOCUMENT", "AMBIGUOUS_MATCH"}), updated_at=f.updated_at,
+            )
+            for f in recent
+        ],
+    )
 
 
 def _pos_with_context(db: Session, workspace_id: str, pos: list[PurchaseOrder]) -> list[PurchaseOrderOut]:
@@ -582,11 +661,11 @@ def search(
     for d, number in db.execute(
         select(Document, Case.case_number)
         .join(Case, Case.id == Document.case_id)
-        .where(Document.workspace_id == workspace_id, func.lower(Document.original_filename).like(like))
+        .where(Document.workspace_id == workspace_id, or_(func.lower(Document.original_filename).like(like), func.lower(Document.document_number).like(like)))
         .order_by(Document.created_at.desc())
         .limit(3)
     ).all():
-        hits.append(SearchHit(kind="document", id=d.id, title=d.original_filename, subtitle=number, href=f"/app/documents/{d.id}"))
+        hits.append(SearchHit(kind="document", id=d.id, title=d.document_number or d.original_filename, subtitle=" · ".join(x for x in (number, d.original_filename if d.document_number else None) if x) or None, href=f"/app/documents/{d.id}"))
 
     return SearchOut(query=q, hits=hits)
 

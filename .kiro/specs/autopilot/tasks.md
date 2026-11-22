@@ -1,0 +1,17 @@
+# Tasks: Autopilot
+- [x] 1. Automation flags on `workspace_policies` (nullable, default on), `get_automation` / `save_automation`, settings API and audit
+  - _Requirements: 4.1, 4.2_
+- [x] 2. `register_service.learn_from_document`, wired into both extraction paths through a savepoint
+  - _Requirements: 1.1–1.7_
+- [x] 3. OCR prompt and schema read the supplier's email, phone and address
+  - _Requirements: 1.2_
+- [x] 4. `automation_service.after_analysis`: close clean cases, queue letters, email approvers or reviewers, always record `automation.completed`
+  - _Requirements: 2.1–2.7_
+- [x] 5. Send on approval through `execute_approval`
+  - _Requirements: 3.1, 3.2_
+- [x] 6. Tests in `backend/tests/test_automation.py`; existing tests updated where behaviour changed on purpose (`test_access`, `test_llm`, `test_intake`)
+- [x] 7. Live stage view (`lib/analysis-stages.ts`, `analysis-stages.tsx`, keyframes in `globals.css`) with `tests/analysis-stages.test.ts`
+  - _Requirements: 5.1–5.4_
+- [x] 8. Automation card in Settings
+  - _Requirements: 4.1_
+- [x] 9. Apply the schema change to Supabase (`scripts/migrate.py --apply`)

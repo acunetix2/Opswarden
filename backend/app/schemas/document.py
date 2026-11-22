@@ -14,6 +14,7 @@ class DocumentOut(BaseModel):
     size_bytes: int
     processing_status: str
     error_code: str | None = None
+    document_number: str | None = None
     created_at: datetime
 
 
@@ -52,6 +53,8 @@ class ExtractedFieldOut(BaseModel):
     source_page: int | None
     source_text: str | None
     review_status: str
+    # [ymin, xmin, ymax, xmax] on a 0-1000 grid of source_page, when OCR located the value.
+    box: list[int] | None = None
 
 
 class ExtractionReviewOut(BaseModel):

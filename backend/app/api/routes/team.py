@@ -29,6 +29,7 @@ from app.core.security import (
 )
 from app.db import get_db, utcnow
 from app.integrations.email.base import EmailMessage
+from app.integrations.email import templates
 from app.integrations.email.provider import get_email_provider
 from app.models.access import Invitation
 from app.models.user import User
@@ -173,16 +174,31 @@ def create_invitation(
     provider = get_email_provider()
     if provider.configured:
         workspace = db.get(Workspace, workspace_id)
+        ws_name = workspace.name if workspace else "a workspace"
+        inviter = ctx.user.full_name or ctx.user.email
+        role_words = {"admin": "an admin", "reviewer": "a reviewer", "contributor": "a contributor"}
+        mail = templates.render_notice(
+            title=f"Join {ws_name} on OpsWarden",
+            preheader=f"{inviter} invited you to {ws_name}.",
+            greeting="Hello,",
+            paragraphs=[
+                f"{inviter} invited you to join {ws_name} on OpsWarden as {role_words.get(payload.role, payload.role)}.",
+                "OpsWarden checks purchase orders, delivery receipts and supplier invoices against each other "
+                "and prepares supplier letters for your team to approve.",
+            ],
+            facts=[templates.Fact("Workspace", ws_name), templates.Fact("Role", payload.role.capitalize()),
+                   templates.Fact("Invited by", inviter)],
+            button=("Accept the invitation", url),
+            footnote=f"The invitation expires in {settings.invitation_ttl_days} days. If you weren't expecting it, you can ignore this email.",
+            reason=f"This email was sent to {email} because {inviter} invited this address.",
+        )
         try:
             provider.send(
                 EmailMessage(
                     recipient=email,
                     subject=f"You're invited to {workspace.name if workspace else 'OpsWarden'}",
-                    body=(
-                        f"{ctx.user.full_name or ctx.user.email} invited you to join "
-                        f"{workspace.name if workspace else 'a workspace'} on OpsWarden as {payload.role}.\n\n"
-                        f"Accept the invitation: {url}\n\nThe link expires in {settings.invitation_ttl_days} days."
-                    ),
+                    body=mail.text,
+                    html=mail.html,
                 ),
                 idempotency_key=digest,
             )

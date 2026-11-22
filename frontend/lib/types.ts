@@ -65,7 +65,12 @@ export interface Case {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  resolution_outcome?: ResolutionOutcome | null;
+  recovered_amount?: string | null;
+  resolution_note?: string | null;
 }
+
+export type ResolutionOutcome = "recovered" | "corrected_invoice" | "no_discrepancy" | "written_off";
 
 export interface Supplier {
   name: string;
@@ -94,9 +99,15 @@ export interface WorkspaceSettings {
   stt_available?: boolean;
   email_configured: boolean;
   email_sender: string | null;
+  storage_backend?: string;
   llm_configured: boolean;
   llm_provider: string | null;
   approval_required: boolean;
+  auto_register?: boolean;
+  auto_draft_letters?: boolean;
+  auto_resolve_clean?: boolean;
+  notify_reviewers?: boolean;
+  send_on_approval?: boolean;
 }
 
 export interface CaseCreate {
@@ -119,6 +130,8 @@ export interface OverviewMetrics {
   findings_in_period: number;
   resolved_in_period: number;
   exposure: Money[];
+  recovered_in_period?: Money[];
+  recovered_total?: Money[];
 }
 
 export interface SeriesPoint {
@@ -175,6 +188,8 @@ export interface DocumentMeta {
   size_bytes: number;
   processing_status: string;
   error_code: string | null;
+  /** The document's own number as read (invoice no, PO no). */
+  document_number?: string | null;
   created_at: string;
 }
 
@@ -272,6 +287,8 @@ export interface EmailDraft {
   subject: string;
   body: string;
   recipient: string | null;
+  /** register = typed by a person; document = read from a supplier document, not yet confirmed. */
+  recipient_source?: "register" | "document" | null;
   requires_human_review: boolean;
   ai_assisted: boolean;
   model: string | null;
@@ -293,6 +310,8 @@ export interface Approval {
   subject: string | null;
   body: string | null;
   recipient: string | null;
+  /** "document" when OpsWarden read the address from a supplier document. */
+  recipient_source?: string | null;
   requested_by: string;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -332,6 +351,11 @@ export interface WorkspaceSettingsUpdate {
   price_tolerance?: string;
   quantity_tolerance?: string;
   reviewers_can_approve?: boolean;
+  auto_register?: boolean;
+  auto_draft_letters?: boolean;
+  auto_resolve_clean?: boolean;
+  notify_reviewers?: boolean;
+  send_on_approval?: boolean;
 }
 
 export interface Invitation {
@@ -485,4 +509,27 @@ export interface SearchHit {
   subtitle: string | null;
   href: string;
   badge: string | null;
+}
+
+/** A step Warden proposes. Nothing runs until the person clicks it. */
+export interface WardenAction {
+  type: "open_case" | "run_analysis" | "draft_letter";
+  case_id: string;
+  case_number: string;
+  label: string;
+}
+
+/** Result of filing one document through smart intake. Mirrors IntakeOut. */
+export interface IntakeResult {
+  case_id: string;
+  case_number: string;
+  created: boolean;
+  matched_by: "open_case" | "purchase_order" | "supplier" | "document";
+  document_id: string;
+  document_type: DocumentType;
+  reference: string | null;
+  supplier_name: string | null;
+  missing: DocumentType[];
+  analysis_started: boolean;
+  message: string;
 }

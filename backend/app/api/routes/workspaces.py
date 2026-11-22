@@ -39,7 +39,7 @@ from app.schemas.workspace import (
     WorkspaceSettingsUpdate,
 )
 from app.agents.llm_provider import get_llm_provider
-from app.services import ocr_service, stt_service, tts_service
+from app.services import inbound_service, ocr_service, recovery_service, stt_service, tts_service
 from app.core.config import settings as app_settings
 from app.integrations.email.provider import get_email_provider
 
@@ -108,6 +108,13 @@ def overview(
         findings_in_period=sum(1 for f in active_findings if _utc(f.created_at) >= start),
         resolved_in_period=sum(1 for c in cases if c.resolved_at and _utc(c.resolved_at) >= start),
         exposure=_money(exposure_total),
+        recovered_in_period=_money(recovery_service.sum_recovered(
+            (c.currency, c.recovered_amount) for c in cases
+            if c.status == "resolved" and c.resolved_at and _utc(c.resolved_at) >= start
+        )),
+        recovered_total=_money(recovery_service.sum_recovered(
+            (c.currency, c.recovered_amount) for c in cases if c.status == "resolved"
+        )),
     )
 
     # Daily series of cases created vs resolved.
@@ -218,9 +225,14 @@ def _settings_out(db: Session, workspace_id: str, role: str) -> WorkspaceSetting
         tts_available=tts_service.available(),
         stt_available=stt_service.available(),
         email_configured=get_email_provider().configured,
+        storage_backend=(app_settings.storage_backend or "local").lower().strip(),
         email_sender=app_settings.smtp_from or None,
         llm_configured=get_llm_provider().configured,
         llm_provider=app_settings.llm_provider or None,
+        **vars(policy_service.get_automation(db, workspace_id)),
+        inbound_available=inbound_service.available(),
+        # Only admins see the address: anyone holding it can file documents into the workspace.
+        inbound_address=inbound_service.address_for(workspace) if workspace and role == "admin" else None,
     )
 
 
@@ -261,6 +273,14 @@ def update_workspace_settings(
         if before != after:
             changes[key] = {"from": str(before), "to": str(after)}
 
+    auto_before = policy_service.get_automation(db, workspace_id)
+    auto_changes: dict = {}
+    for flag in (*policy_service.AUTOMATION_FLAGS, "follow_up_days"):
+        value = getattr(payload, flag)
+        if value is not None and value != getattr(auto_before, flag):
+            auto_changes[flag] = value
+            changes[flag] = {"from": str(getattr(auto_before, flag)).lower(), "to": str(value).lower()}
+
     if changes:
         policy_service.save_policy(
             db,
@@ -270,6 +290,9 @@ def update_workspace_settings(
             reviewers_can_approve=reviewers,
             updated_by=ctx.user.id,
         )
+        if auto_changes:
+            db.flush()
+            policy_service.save_automation(db, workspace_id, auto_changes, ctx.user.id)
         audit_service.record_event(
             db,
             workspace_id=workspace_id,
