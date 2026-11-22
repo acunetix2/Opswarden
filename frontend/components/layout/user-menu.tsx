@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ChevronsUpDown, Keyboard, LogOut, Moon, Sun } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronsUpDown, Keyboard, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { useCallback, useId, useRef, useState } from "react";
 
 import { Avatar } from "@/components/ui/avatar";
@@ -48,6 +49,15 @@ export function UserMenu({ collapsedClass }: { collapsedClass?: string }) {
             </button>
           ))}
           <div className="mt-1 border-t border-nav-line">
+            <Link
+              role="menuitem"
+              href="/app/profile"
+              onClick={close}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-[13px] text-nav-text hover:bg-nav-line"
+            >
+              <UserRound className="size-4 text-nav-muted" aria-hidden />
+              Your profile
+            </Link>
             <button
               role="menuitemcheckbox"
               aria-checked={dark}

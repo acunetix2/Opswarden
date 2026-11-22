@@ -7,7 +7,7 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -309,6 +309,55 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 @router.get("/auth/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut(id=user.id, email=user.email, full_name=user.full_name)
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=1, max_length=200)
+
+
+def _audit_everywhere(db: Session, user: User, event_type: str, payload: dict) -> None:
+    """Profile events are recorded in every workspace the person belongs to."""
+    for m in db.execute(select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)).scalars():
+        audit_service.record_event(
+            db, workspace_id=m.workspace_id, event_type=event_type, actor_type="user", actor_id=user.id, payload=payload, commit=False
+        )
+
+
+@router.patch("/auth/me", response_model=UserOut)
+def update_me(payload: ProfileUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> UserOut:
+    """Change your display name. Your email is your sign-in and isn't changed here."""
+    name = " ".join(payload.full_name.split())[:200]
+    if not name:
+        raise ApiError(422, "NAME_REQUIRED", "Enter your name.")
+    if name != user.full_name:
+        _audit_everywhere(db, user, "user.profile_updated", {"fields": ["full_name"]})
+        user.full_name = name
+        db.commit()
+    return UserOut(id=user.id, email=user.email, full_name=user.full_name)
+
+
+@router.post("/auth/me/password", status_code=204)
+def change_password(payload: PasswordChange, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
+    """Change your password. Needs the current one, so a borrowed session can't lock you out."""
+    require_local_auth()
+    if _throttled(f"pwchange:{user.id}"):
+        raise ApiError(429, "RATE_LIMITED", "Too many attempts. Try again in a few minutes.")
+    if not verify_password(payload.current_password, user.hashed_password):
+        raise ApiError(400, "CURRENT_PASSWORD_INCORRECT", "Your current password isn't right.")
+    problem = password_problem(payload.new_password)
+    if problem:
+        raise ApiError(422, "WEAK_PASSWORD", problem)
+    if verify_password(payload.new_password, user.hashed_password):
+        raise ApiError(422, "SAME_PASSWORD", "Choose a password different from your current one.")
+    user.hashed_password = hash_password(payload.new_password)
+    _audit_everywhere(db, user, "user.password_changed", {})
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/workspaces", response_model=list[WorkspaceOut])

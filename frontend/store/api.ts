@@ -174,6 +174,13 @@ export const opswardenApi = createApi({
     login: build.mutation<{ access_token: string }, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
     }),
+    updateProfile: build.mutation<User, { full_name: string }>({
+      query: (body) => ({ url: "/auth/me", method: "PATCH", body }),
+      invalidatesTags: ["Me", "Members", "Activity"],
+    }),
+    changePassword: build.mutation<void, { current_password: string; new_password: string }>({
+      query: (body) => ({ url: "/auth/me/password", method: "POST", body }),
+    }),
     signupStart: build.mutation<SignupStart, { full_name: string; email: string; password: string; workspace_name: string }>({
       query: (body) => ({ url: "/auth/signup/start", method: "POST", body }),
     }),
@@ -471,6 +478,8 @@ export const opswardenApi = createApi({
 });
 
 export const {
+  useUpdateProfileMutation,
+  useChangePasswordMutation,
   useRegisteredSuppliersQuery,
   useCreateSupplierMutation,
   useUpdateSupplierMutation,
