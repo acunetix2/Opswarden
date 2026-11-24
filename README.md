@@ -18,7 +18,6 @@ and drafts the supplier email for a person to approve.
 ![Built with Kiro](https://img.shields.io/badge/Built%20with-Kiro-7C3AED)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/acunetix2/Opswarden)
 
 </div>
 
